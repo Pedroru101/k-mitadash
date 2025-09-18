@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard K-mita - Análisis de Productos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Dashboard K-mita</h1>
+            <p>Análisis interactivo de productos de arena biodegradable</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Productos</h3>
+                <span id="totalProducts">-</span>
+            </div>
+            <div class="stat-card">
+                <h3>Inventario Total</h3>
+                <span id="totalInventory">-</span>
+            </div>
+            <div class="stat-card">
+                <h3>Precio Promedio</h3>
+                <span id="avgPrice">-</span>
+            </div>
+            <div class="stat-card">
+                <h3>Productos Activos</h3>
+                <span id="activeProducts">-</span>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h3>💰 Precio vs Peso</h3>
+                <canvas id="priceWeightChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📦 Inventario por Producto</h3>
+                <canvas id="inventoryChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>💵 Distribución de Precios</h3>
+                <canvas id="priceDistributionChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📊 Estado de Productos</h3>
+                <canvas id="statusChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📈 Precio por Kilogramo</h3>
+                <canvas id="pricePerKgChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>🏷️ Productos con Promociones</h3>
+                <canvas id="promoChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>⚖️ Distribución por Peso</h3>
+                <canvas id="weightDistributionChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📅 Productos por Año de Creación</h3>
+                <canvas id="yearCreationChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>📊 Análisis de Inventario</h3>
+                <canvas id="inventoryAnalysisChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>💎 Productos Premium vs Económicos</h3>
+                <canvas id="premiumEconomicChart"></canvas>
+            </div>
+        </div>
+
+        <div class="data-table">
+            <h3>📋 Tabla de Productos</h3>
+            <div class="filters-section">
+                <h4>🔍 Filtros y Segmentadores</h4>
+                <div class="table-controls">
+                    <input type="text" id="searchInput" placeholder="Buscar productos...">
+                    
+                    <select id="statusFilter">
+                        <option value="">Todos los estados</option>
+                        <option value="active">Activos</option>
+                        <option value="archived">Archivados</option>
+                    </select>
+                    
+                    <select id="priceRangeFilter">
+                        <option value="">Todos los precios</option>
+                        <option value="0-200">$0 - $200</option>
+                        <option value="201-500">$201 - $500</option>
+                        <option value="501-1000">$501 - $1,000</option>
+                        <option value="1001-2000">$1,001 - $2,000</option>
+                        <option value="2001-99999">$2,001+</option>
+                    </select>
+                    
+                    <select id="weightFilter">
+                        <option value="">Todos los pesos</option>
+                        <option value="1-5">1-5 kg</option>
+                        <option value="6-15">6-15 kg</option>
+                        <option value="16-30">16-30 kg</option>
+                        <option value="31-60">31-60 kg</option>
+                        <option value="61-999">61+ kg</option>
+                    </select>
+                    
+                    <select id="inventoryFilter">
+                        <option value="">Todo el inventario</option>
+                        <option value="0-99">Stock Bajo (0-99)</option>
+                        <option value="100-499">Stock Medio (100-499)</option>
+                        <option value="500-999">Stock Alto (500-999)</option>
+                        <option value="1000-99999">Stock Muy Alto (1000+)</option>
+                        <option value="negative">Stock Negativo</option>
+                    </select>
+                    
+                    <select id="promoFilter">
+                        <option value="">Todos los productos</option>
+                        <option value="promo">Solo Promociones</option>
+                        <option value="regular">Solo Regulares</option>
+                    </select>
+                    
+                    <select id="yearFilter">
+                        <option value="">Todos los años</option>
+                        <option value="2020">Creados en 2020</option>
+                        <option value="2021">Creados en 2021</option>
+                        <option value="2022">Creados en 2022</option>
+                        <option value="2023">Creados en 2023</option>
+                        <option value="2024">Creados en 2024</option>
+                        <option value="2025">Creados en 2025</option>
+                    </select>
+                    
+                    <button id="clearFilters" class="clear-btn">🗑️ Limpiar Filtros</button>
+                </div>
+                
+                <div class="filter-summary" id="filterSummary">
+                    Mostrando todos los productos
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Peso (kg)</th>
+                            <th>Precio ($)</th>
+                            <th>$/kg</th>
+                            <th>Inventario</th>
+                            <th>Estado</th>
+                            <th>Promoción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
