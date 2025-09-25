@@ -1,0 +1,8 @@
+# Redirects para Netlify
+/              /simple-dashboard.html    200
+/dashboard     /simple-dashboard.html    200
+/login         /simple-dashboard.html    200
+/analytics     /simple-dashboard.html    200
+
+# Fallback para SPA
+/*             /simple-dashboard.html    200

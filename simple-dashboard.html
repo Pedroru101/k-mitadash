@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-mita Analytics Dashboard - Simple</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="shopify-analytics-styles.css">
+    <script src="config.js"></script>
+</head>
+<body>
+    <!-- Pantalla de Login -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>🔐 K-mita Analytics</h1>
+                <p>Ingresa tus credenciales para acceder</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="input-group">
+                    <label for="username">👤 Usuario</label>
+                    <input type="text" id="username" name="username" required placeholder="Ingresa tu usuario">
+                </div>
+                <div class="input-group">
+                    <label for="password">🔒 Contraseña</label>
+                    <input type="password" id="password" name="password" required placeholder="Ingresa tu contraseña">
+                </div>
+                <button type="submit" class="login-btn">Iniciar Sesión</button>
+                <div id="loginError" class="login-error" style="display: none;"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard Principal (oculto inicialmente) -->
+    <div id="dashboardContainer" class="container" style="display: none;">
+        <header>
+            <h1>📊 K-mita Analytics Dashboard</h1>
+            <p>Análisis completo de ventas, clientes y rendimiento de Shopify</p>
+            <div class="data-source-info">
+                <span id="dataSourceStatus">🔄 Cargando datos...</span>
+                <button id="refreshData" class="refresh-btn">🔄 Actualizar Datos</button>
+                <button id="logoutBtn" class="logout-btn">🚪 Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <!-- KPIs Principales -->
+        <div class="kpi-grid">
+            <div class="kpi-card revenue">
+                <div class="kpi-icon">💰</div>
+                <div class="kpi-content">
+                    <h3>Ingresos Totales</h3>
+                    <span id="totalRevenue">-</span>
+                    <small id="revenueChange">-</small>
+                </div>
+            </div>
+            <div class="kpi-card orders">
+                <div class="kpi-icon">📦</div>
+                <div class="kpi-content">
+                    <h3>Total Órdenes</h3>
+                    <span id="totalOrders">-</span>
+                    <small id="ordersChange">-</small>
+                </div>
+            </div>
+            <div class="kpi-card customers">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                    <h3>Clientes Únicos</h3>
+                    <span id="uniqueCustomers">-</span>
+                    <small id="customersChange">-</small>
+                </div>
+            </div>
+            <div class="kpi-card aov">
+                <div class="kpi-icon">🛒</div>
+                <div class="kpi-content">
+                    <h3>Ticket Promedio</h3>
+                    <span id="avgOrderValue">-</span>
+                    <small id="aovChange">-</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Específicos del Café -->
+        <div class="kpi-grid">
+            <div class="kpi-card coffee">
+                <div class="kpi-icon">☕</div>
+                <div class="kpi-content">
+                    <h3>Kilos Vendidos</h3>
+                    <span id="totalKilos">-</span>
+                    <small id="kilosChange">-</small>
+                </div>
+            </div>
+            <div class="kpi-card bags">
+                <div class="kpi-icon">🛍️</div>
+                <div class="kpi-content">
+                    <h3>Bolsas Vendidas</h3>
+                    <span id="totalBags">-</span>
+                    <small id="bagsChange">-</small>
+                </div>
+            </div>
+            <div class="kpi-card price-kg">
+                <div class="kpi-icon">⚖️</div>
+                <div class="kpi-content">
+                    <h3>Precio Promedio/Kg</h3>
+                    <span id="avgPricePerKg">-</span>
+                    <small id="priceKgChange">-</small>
+                </div>
+            </div>
+            <div class="kpi-card fulfillment">
+                <div class="kpi-icon">🚚</div>
+                <div class="kpi-content">
+                    <h3>Días Promedio Fulfillment</h3>
+                    <span id="avgFulfillmentDays">-</span>
+                    <small id="fulfillmentChange">-</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros de Tiempo -->
+        <div class="time-filters">
+            <h3>📅 Período de Análisis</h3>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-period="all">Todo el Tiempo</button>
+                <button class="filter-btn" data-period="12m">Últimos 12 Meses</button>
+                <button class="filter-btn" data-period="6m">Últimos 6 Meses</button>
+                <button class="filter-btn" data-period="3m">Últimos 3 Meses</button>
+                <button class="filter-btn" data-period="1m">Último Mes</button>
+            </div>
+        </div>
+
+        <!-- Gráficas Principales -->
+        <div class="charts-grid">
+            <div class="chart-container large">
+                <h3>📈 Tendencia de Ventas Mensuales</h3>
+                <canvas id="salesTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Gráficas Específicas del Negocio -->
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h3>☕ Kilos Vendidos por Mes</h3>
+                <canvas id="kilosChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>🛍️ Bolsas Vendidas por Mes</h3>
+                <canvas id="bagsChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>💳 Métodos de Pago</h3>
+                <canvas id="paymentMethodsChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>🎯 Aceptación de Marketing</h3>
+                <canvas id="marketingChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Análisis Geográfico -->
+        <div class="charts-grid">
+            <div class="chart-container large">
+                <h3>🌎 Ventas por Estado</h3>
+                <canvas id="statesChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Tablas de Análisis -->
+        <div class="data-tables">
+            <div class="table-section">
+                <h3>🌟 Análisis Detallado de Clientes</h3>
+                <div class="table-wrapper">
+                    <table id="customersAnalysisTable">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Órdenes</th>
+                                <th>Total Gastado</th>
+                                <th>Kilos Comprados</th>
+                                <th>Bolsas Compradas</th>
+                                <th>Precio/Kg</th>
+                                <th>Precio/Bolsa</th>
+                                <th>Última Compra</th>
+                                <th>Días Sin Comprar</th>
+                                <th>Estado</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customersAnalysisBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-tables">
+            <div class="table-section">
+                <h3>📦 Análisis de Órdenes</h3>
+                <div class="table-wrapper">
+                    <table id="ordersAnalysisTable">
+                        <thead>
+                            <tr>
+                                <th>Orden #</th>
+                                <th>Cliente</th>
+                                <th>Fecha Pago</th>
+                                <th>Fecha Fulfillment</th>
+                                <th>Días Fulfillment</th>
+                                <th>Importe</th>
+                                <th>Descuento</th>
+                                <th>% Descuento</th>
+                                <th>Kilos</th>
+                                <th>Bolsas</th>
+                                <th>Precio/Kg</th>
+                                <th>Ciudad</th>
+                                <th>Estado</th>
+                                <th>Método Pago</th>
+                                <th>Acepta MKT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersAnalysisBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alertas de Clientes -->
+        <div class="insights-section">
+            <h3>🚨 Alertas de Clientes Inactivos</h3>
+            <div class="alerts-grid" id="customerAlerts">
+                <!-- Se llenarán dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Insights -->
+        <div class="insights-section">
+            <h3>💡 Insights y Recomendaciones</h3>
+            <div class="insights-grid" id="businessInsights">
+                <!-- Se llenarán dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <script src="simple-dashboard.js"></script>
+</body>
+</html>

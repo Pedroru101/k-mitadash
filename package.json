@@ -1,0 +1,27 @@
+{
+  "name": "k-mita-analytics-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard de análisis para K-mita - Negocio de café con métricas específicas de Shopify",
+  "main": "simple-dashboard.html",
+  "scripts": {
+    "start": "python server.py",
+    "build": "echo 'Build completed - Static files ready'",
+    "dev": "python -m http.server 8080",
+    "deploy": "netlify deploy --prod"
+  },
+  "keywords": [
+    "dashboard",
+    "analytics",
+    "shopify",
+    "coffee",
+    "k-mita",
+    "business-intelligence"
+  ],
+  "author": "K-mita Analytics Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/k-mita/analytics-dashboard.git"
+  },
+  "homepage": "https://k-mita-analytics.netlify.app"
+}

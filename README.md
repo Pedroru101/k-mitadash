@@ -1,197 +1,161 @@
-# 📊 K-mita Dashboard
+# K-mita Analytics Dashboard 🐱
 
-Dashboard interactivo para análisis de productos de arena biodegradable K-mita. Una aplicación web moderna que transforma datos de Shopify en visualizaciones comprensibles y actionables.
+Dashboard especializado para análisis de datos de K-mita, empresa líder en arena biodegradable para gatos en México.
 
-![Dashboard Preview](https://img.shields.io/badge/Status-Active-brightgreen) ![Version](https://img.shields.io/badge/Version-1.0.0-blue) ![License](https://img.shields.io/badge/License-MIT-yellow)
+## 🚀 Características Principales
 
-## 🎯 Características Principales
+- 📊 **KPIs en Tiempo Real**: Ingresos, órdenes, clientes únicos y ticket promedio
+- 📈 **Gráficos Interactivos**: Tendencias de ventas, análisis de productos y geografía
+- 👥 **Análisis de Clientes**: Segmentación automática (VIP, Loyal, At-Risk, etc.)
+- 🏆 **Métricas Específicas**: Kilos vendidos, bolsas distribuidas, precio por kg
+- 🌎 **Análisis Geográfico**: Ventas por estado y ciudad en México
+- 📦 **Fulfillment**: Tiempos de entrega y performance logístico
+- 💳 **Métodos de Pago**: Análisis de preferencias de pago
+- 📧 **Marketing**: Performance de campañas y suscripciones
+- 🔒 **Autenticación**: Sistema seguro de acceso
 
-### 📈 **Visualizaciones Interactivas**
-- **Precio vs Peso**: Análisis de correlación entre precio y peso de productos
-- **Inventario por Producto**: Monitoreo de stock con código de colores
-- **Distribución de Precios**: Segmentación por rangos de precios
-- **Estado de Productos**: Productos activos vs archivados
-- **Precio por Kilogramo**: Análisis de eficiencia de precios
-- **Productos con Promociones**: Identificación de ofertas especiales
-- **Distribución por Peso**: Categorización por rangos de peso
-- **Análisis Temporal**: Productos creados por año
-- **Análisis de Inventario**: Niveles de stock categorizados
-- **Segmentación Premium**: Clasificación económico/medio/premium/luxury
+## ⚙️ Configuración Rápida
 
-### 🔍 **Sistema de Filtros Avanzado**
-- **Búsqueda en tiempo real** por nombre de producto
-- **Filtro por estado**: Activos/Archivados
-- **Rango de precios**: 5 categorías predefinidas
-- **Filtro por peso**: Desde 1kg hasta 61kg+
-- **Nivel de inventario**: Stock bajo/medio/alto/negativo
-- **Tipo de producto**: Promociones vs regulares
-- **Filtro temporal**: Por año de creación
-- **Limpieza rápida**: Botón para resetear todos los filtros
+### 1. Configurar Google Sheets API
 
-### 📊 **Panel de Estadísticas**
-- Total de productos en catálogo
-- Inventario total disponible
-- Precio promedio de productos
-- Cantidad de productos activos
-
-## 🚀 Instalación y Uso
-
-### Opción 1: Servidor Python (Recomendado)
 ```bash
-# Clonar el repositorio
-git clone https://github.com/Pedroru101/k-mitadash.git
-cd k-mitadash
-
-# Ejecutar servidor local
-python server.py
+# 1. Ve a Google Cloud Console
+# 2. Habilita Google Sheets API
+# 3. Crea una API Key
+# 4. Haz público tu Google Sheets o configura permisos
 ```
 
-### Opción 2: Servidor Web Local
-```bash
-# Con Node.js
-npx http-server
+### 2. Actualizar Configuración
 
-# Con PHP
-php -S localhost:8000
+Edita `config.js` con tus credenciales:
 
-# Con Python 3
-python -m http.server 8000
+```javascript
+GOOGLE_SHEETS: {
+    SHEET_ID: 'TU_SHEET_ID_AQUI',
+    API_KEY: 'TU_API_KEY_AQUI',
+    ORDERS_SHEET: 'Monthly_Analysis - Orders_Data',
+    CUSTOMERS_SHEET: 'Monthly_Analysis - Customers_Data'
+}
 ```
 
-### Opción 3: Abrir directamente
-Simplemente abre `index.html` en tu navegador (funcionalidad limitada por CORS)
+### 3. Estructura de Datos Requerida
+
+#### 📋 Hoja: Monthly_Analysis - Orders_Data
+```
+order_id, order_name, created_at, total_price, customer_email, 
+customer_first_name, customer_last_name, customer_orders_count,
+customer_total_spent, shipping_city, shipping_province, 
+shipping_country, total_kilos, total_bags, product_details,
+payment_method, fulfillment_status, currency, customer_segment
+```
+
+#### 👥 Hoja: Monthly_Analysis - Customers_Data  
+```
+customer_id, email, first_name, last_name, full_name,
+orders_count, total_spent, avg_spent_per_order, created_at,
+updated_at, days_since_last_order, customer_segment,
+address_city, address_province, address_country
+```
+
+## 🎯 URLs de Google Sheets
+
+- **Orders Data**: `https://docs.google.com/spreadsheets/d/1BrEpAFNBYeW-N36_nvlyVivWsrkirTGpTuHy7AnCMi0/edit?gid=0#gid=0`
+- **Customers Data**: `https://docs.google.com/spreadsheets/d/1BrEpAFNBYeW-N36_nvlyVivWsrkirTGpTuHy7AnCMi0/edit?gid=1768174200#gid=1768174200`
+
+## 🚀 Uso del Dashboard
+
+### Acceso
+1. Abre `shopify-analytics-dashboard.html`
+2. **Usuario**: `kmita`
+3. **Contraseña**: `analytics2024`
+
+### Funcionalidades
+- **Filtros de Tiempo**: Todo el tiempo, 12m, 6m, 3m, 1m
+- **Actualización**: Botón de refresh para datos en tiempo real
+- **Gráficos Interactivos**: Hover para detalles
+- **Tablas Dinámicas**: Top clientes y análisis mensual
+- **Insights Automáticos**: Alertas y recomendaciones
 
 ## 📁 Estructura del Proyecto
 
 ```
 k-mitadash/
-├── index.html          # Página principal del dashboard
-├── styles.css          # Estilos y diseño responsivo
-├── script.js           # Lógica de aplicación y gráficas
-├── server.py           # Servidor Python con CORS
-├── shopify.jon.json    # Datos de productos de Shopify
-└── README.md           # Documentación del proyecto
+├── shopify-analytics-dashboard.html    # Dashboard principal
+├── shopify-analytics-script.js         # Lógica de datos K-mita
+├── shopify-analytics-styles.css        # Estilos del dashboard
+├── config.js                          # Configuración centralizada
+├── simple-dashboard.html              # Dashboard con datos demo
+├── simple-dashboard.js                # Lógica del dashboard demo
+├── sample-data.json                   # Datos de ejemplo
+├── .env                              # Variables de entorno
+└── README.md                         # Documentación
 ```
 
-## 🛠️ Tecnologías Utilizadas
+## 🛠️ Tecnologías
 
 - **Frontend**: HTML5, CSS3, JavaScript ES6+
-- **Visualizaciones**: Chart.js 3.x
-- **Servidor**: Python HTTP Server
-- **Diseño**: CSS Grid, Flexbox, Responsive Design
-- **Datos**: JSON de API Shopify
+- **Gráficos**: Chart.js v3
+- **API**: Google Sheets API v4
+- **Diseño**: Responsive, Mobile-first
+- **Autenticación**: Sistema propio
 
-## 📊 Tipos de Gráficas Implementadas
+## 📊 Métricas K-mita Específicas
 
-| Gráfica | Tipo | Propósito |
-|---------|------|-----------|
-| Precio vs Peso | Scatter | Correlación precio-peso |
-| Inventario | Bar | Niveles de stock |
-| Distribución Precios | Doughnut | Rangos de precios |
-| Estado Productos | Pie | Activos vs archivados |
-| Precio/kg | Bar | Eficiencia de precios |
-| Promociones | Doughnut | Productos en oferta |
-| Distribución Peso | Bar | Categorías por peso |
-| Creación Temporal | Line | Tendencia de creación |
-| Análisis Inventario | Doughnut | Niveles de stock |
-| Segmentación Premium | Polar Area | Categorías de precio |
+### KPIs Principales
+- **Ingresos Totales** (MXN)
+- **Total de Órdenes**
+- **Clientes Únicos**
+- **Ticket Promedio**
 
-## 🎨 Características de Diseño
+### Métricas de Producto
+- **Kilos Vendidos** (arena biodegradable)
+- **Bolsas Distribuidas**
+- **Precio Promedio por Kg**
+- **Productos Más Vendidos**
 
-- **Responsive Design**: Adaptable a móviles, tablets y desktop
-- **Tema Moderno**: Gradientes y sombras suaves
-- **Código de Colores**: Intuitivo para diferentes estados
-- **Animaciones**: Transiciones suaves y efectos hover
-- **Accesibilidad**: Contraste adecuado y navegación por teclado
+### Análisis de Clientes
+- **Segmentación**: New, One-time, Repeat, Loyal, VIP, At-Risk
+- **Geografía**: Estados y ciudades de México
+- **Comportamiento**: Frecuencia de compra, valor de vida
 
-## 📈 Insights de Negocio
+## 🔧 Solución de Problemas
 
-El dashboard permite identificar:
-
-- **Productos con mejor relación precio/peso**
-- **Niveles críticos de inventario**
-- **Efectividad de promociones**
-- **Tendencias de creación de productos**
-- **Distribución de precios en el catálogo**
-- **Productos premium vs económicos**
-
-## 🔧 Personalización
-
-### Agregar Nuevos Filtros
-```javascript
-// En script.js, función applyFilters()
-const newFilter = document.getElementById('newFilter');
-const newFilterValue = newFilter.value;
-// Agregar lógica de filtrado
+### Error 403 - API Key
+```bash
+# Verifica que la API Key tenga permisos
+# Asegúrate de que Google Sheets API esté habilitada
+# Confirma que el documento sea público
 ```
 
-### Crear Nueva Gráfica
-```javascript
-function generateNewChart() {
-    const ctx = document.getElementById('newChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar', // o line, pie, doughnut, etc.
-        data: {
-            // Configuración de datos
-        },
-        options: {
-            // Opciones de la gráfica
-        }
-    });
-}
+### Error 404 - Documento no encontrado
+```bash
+# Verifica el SHEET_ID en config.js
+# Confirma que las hojas existan con los nombres correctos
 ```
 
-## 🐛 Solución de Problemas
+### Sin datos
+```bash
+# Verifica la estructura de columnas
+# Confirma que hay datos en las hojas
+# Revisa la consola del navegador para errores
+```
 
-### Las gráficas no cargan
-- Verificar que el servidor esté ejecutándose
-- Comprobar la consola del navegador para errores
-- Asegurar que `shopify.jon.json` esté en el directorio correcto
+## 📈 Próximas Funcionalidades
 
-### Filtros no funcionan
-- Verificar que todos los elementos HTML tengan los IDs correctos
-- Comprobar que los event listeners estén configurados
+- [ ] Exportación de reportes PDF
+- [ ] Alertas automáticas por email
+- [ ] Predicciones de ventas con ML
+- [ ] Integración directa con Shopify API
+- [ ] Dashboard móvil nativo
+- [ ] Análisis de inventario
 
-### Problemas de CORS
-- Usar el servidor Python incluido (`python server.py`)
-- O cualquier servidor web local
+## 🤝 Soporte
 
-## 🤝 Contribuciones
-
-Las contribuciones son bienvenidas. Para contribuir:
-
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📝 Roadmap
-
-- [ ] Exportar gráficas como imágenes
-- [ ] Filtros por rango de fechas personalizado
-- [ ] Comparación entre productos
-- [ ] Alertas de stock bajo
-- [ ] Integración con API de Shopify en tiempo real
-- [ ] Dashboard de métricas de ventas
-- [ ] Modo oscuro/claro
-
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
-
-## 👨‍💻 Autor
-
-**Pedro Ruiz** - [Pedroru101](https://github.com/Pedroru101)
-
-## 🙏 Agradecimientos
-
-- Chart.js por las excelentes librerías de visualización
-- K-mita por los datos de productos
-- Comunidad de desarrolladores por inspiración y feedback
+Para soporte técnico o consultas:
+- 📧 Email: soporte@k-mita.com
+- 📱 WhatsApp: +52 55 1234 5678
+- 🌐 Web: www.k-mita.com
 
 ---
 
-⭐ Si este proyecto te fue útil, ¡dale una estrella en GitHub!
-
-📧 Para soporte o consultas: [Crear un Issue](https://github.com/Pedroru101/k-mitadash/issues)
+**K-mita Analytics Dashboard v1.0.0** - Desarrollado específicamente para el análisis de arena biodegradable para gatos 🐱
