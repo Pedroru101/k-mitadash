@@ -4,8 +4,8 @@
 const CONFIG = {
     // Credenciales de autenticación
     AUTH: {
-        USERNAME: 'kmita',
-        PASSWORD: 'analytics2024'
+        USERNAME: '__DASHBOARD_USERNAME__',
+        PASSWORD: '__DASHBOARD_PASSWORD__'
     },
 
     // Configuración de Google Sheets (CSV público - no requiere API key)

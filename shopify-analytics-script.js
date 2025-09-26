@@ -1,3 +1,6 @@
+// K-mita Analytics Dashboard - Script Principal Limpio
+// Versión depurada sin código duplicado
+
 // Validar que CONFIG esté disponible
 if (typeof CONFIG === 'undefined') {
     console.error('[ERROR] CONFIG no está definido. Asegúrate de que config.js se cargue antes de este script.');
@@ -14,160 +17,175 @@ const validCredentials = {
     [CONFIG.AUTH.USERNAME]: CONFIG.AUTH.PASSWORD
 };
 
+// DEBUG: Verificar configuración de autenticación
+console.log('[DEBUG CONFIG] CONFIG.AUTH:', CONFIG.AUTH);
+console.log('[DEBUG CONFIG] validCredentials:', validCredentials);
+console.log('[DEBUG CONFIG] validateCredentials function:', typeof validateCredentials);
+
 // Log de inicialización
 console.log('[INIT] K-mita Analytics Script inicializado correctamente');
 console.log('[CONFIG] GOOGLE_SHEETS:', GOOGLE_SHEETS_CONFIG);
 console.log('[CONFIG] APP:', APP_CONFIG);
 
-// Estado de autenticación
+// Estado de autenticación y variables globales
 let isAuthenticated = false;
-
-// Variables globales para almacenar datos
 let ordersData = [];
 let customersData = [];
 let currentPeriod = 'all';
 let isDataLoaded = false;
 let lastDataUpdate = null;
 
-// Función para construir URL de Google Sheets CSV export público (sin API Key)
-function buildSheetURL(sheetName) {
-    const url = buildGoogleSheetsURL(sheetName);
-    console.log(`[DEBUG] URL CSV público construida para ${sheetName}:`, url);
-    console.log(`[DEBUG] Verificación: URL no contiene API key:`, !url.includes('AIzaSy'));
-    return url;
+// ===========================================
+// FUNCIONES DE AUTENTICACIÓN
+// ===========================================
+
+// Función única para manejar el login con debug
+function handleLogin(event) {
+    event.preventDefault();
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errorElement = document.getElementById('loginError');
+
+    // DEBUG: Logs detallados para depuración
+    console.log('[DEBUG LOGIN] Intentando login con usuario:', username);
+    console.log('[DEBUG LOGIN] CONFIG disponible:', typeof CONFIG !== 'undefined');
+    console.log('[DEBUG LOGIN] validCredentials:', validCredentials);
+    console.log('[DEBUG LOGIN] validateCredentials disponible:', typeof validateCredentials === 'function');
+    console.log('[DEBUG LOGIN] Credenciales ingresadas - username:', username, 'password length:', password.length);
+
+    // Limpiar errores previos
+    if (errorElement) errorElement.style.display = 'none';
+
+    // Validar que hay credenciales
+    if (!username || !password) {
+        if (errorElement) {
+            errorElement.textContent = '❌ Por favor ingresa usuario y contraseña';
+            errorElement.style.display = 'block';
+        }
+        console.log('[DEBUG LOGIN] Error: Campos vacíos');
+        return;
+    }
+
+    // Validar credenciales usando validCredentials
+    const isValid = validCredentials[username] && validCredentials[username] === password;
+    console.log('[DEBUG LOGIN] Validación - isValid:', isValid, 'Expected password for', username, ':', validCredentials[username]);
+
+    if (isValid) {
+        // Login exitoso
+        isAuthenticated = true;
+        console.log('[DEBUG LOGIN] Login exitoso para usuario:', username);
+
+        // Guardar en sessionStorage para persistencia
+        sessionStorage.setItem('kmita_authenticated', 'true');
+        sessionStorage.setItem('kmita_username', username);
+
+        // Ocultar pantalla de login
+        const loginScreen = document.getElementById('loginScreen');
+        if (loginScreen) loginScreen.style.display = 'none';
+
+        // Mostrar dashboard
+        const dashboardContainer = document.getElementById('dashboardContainer');
+        if (dashboardContainer) dashboardContainer.style.display = 'block';
+
+        // Limpiar formulario
+        document.getElementById('loginForm').reset();
+
+        // Cargar datos después del login
+        setTimeout(() => {
+            testGoogleSheetsConnection();
+        }, 500);
+
+    } else {
+        // Login fallido
+        if (errorElement) {
+            errorElement.textContent = '❌ Usuario o contraseña incorrectos';
+            errorElement.style.display = 'block';
+        }
+
+        // Limpiar contraseña por seguridad
+        document.getElementById('password').value = '';
+
+        console.log('[DEBUG LOGIN] Login fallido para usuario:', username);
+        console.log('[DEBUG LOGIN] Credenciales esperadas:', Object.keys(validCredentials));
+        console.log('[DEBUG LOGIN] Contraseña coincide:', validCredentials[username] === password);
+    }
 }
 
-// Función para parsear respuesta CSV de Google Sheets
-function parseGoogleSheetsCSVResponse(csvText) {
-    console.log('[DEBUG] Iniciando parseGoogleSheetsCSVResponse');
-    console.log('[DEBUG] Respuesta CSV de Google Sheets (primeros 200 chars):', csvText.substring(0, 200) + '...');
+// Función única para cerrar sesión
+function handleLogout() {
+    isAuthenticated = false;
 
-    if (!csvText || csvText.trim() === '') {
-        console.warn('[DEBUG] No hay contenido en la respuesta CSV');
-        return [];
-    }
+    // Limpiar sessionStorage
+    sessionStorage.removeItem('kmita_authenticated');
+    sessionStorage.removeItem('kmita_username');
 
-    const lines = csvText.split('\n').filter(line => line.trim());
-    if (lines.length === 0) {
-        console.warn('No hay líneas en el CSV');
-        return [];
-    }
+    // Mostrar pantalla de login
+    const loginScreen = document.getElementById('loginScreen');
+    if (loginScreen) loginScreen.style.display = 'flex';
 
-    // Primera línea son los encabezados
-    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
-    console.log('[LOG] Encabezados encontrados:', headers);
+    // Ocultar dashboard
+    const dashboardContainer = document.getElementById('dashboardContainer');
+    if (dashboardContainer) dashboardContainer.style.display = 'none';
 
-    const data = [];
+    // Limpiar formulario
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) loginForm.reset();
+    const loginError = document.getElementById('loginError');
+    if (loginError) loginError.style.display = 'none';
 
-    // Procesar filas de datos (saltando la primera que son encabezados)
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
-        if (values.length > 0 && values.some(v => v !== '')) {
-            const rowData = {};
-            headers.forEach((header, index) => {
-                rowData[header] = values[index] || '';
-            });
-            data.push(rowData);
-        }
-    }
+    // Limpiar datos sensibles
+    ordersData = [];
+    customersData = [];
+    isDataLoaded = false;
 
-    console.log(`[LOG] Parseados ${data.length} registros de ${lines.length - 1} filas`);
-    if (data.length > 0) {
-        console.log('[LOG] Primer registro parseado:', data[0]);
-        console.log('[LOG] Campos clave en primer registro:', {
-            customer_email: data[0].customer_email,
-            created_at: data[0].created_at,
-            order_date: data[0].order_date,
-            fulfilled_at: data[0].fulfilled_at,
-            updated_at: data[0].updated_at,
-            total_kilos: data[0].total_kilos,
-            total_price: data[0].total_price,
-            days_since_last_order: data[0].days_since_last_order
-        });
-    }
-    return data;
+    console.log('[DEBUG LOGOUT] Sesión cerrada correctamente');
 }
 
-// Función principal para cargar datos de K-mita
-async function loadShopifyData() {
-    console.log('[LOG] Iniciando loadShopifyData - usando CSV público');
-    updateDataSourceStatus('🔄 Cargando datos de K-mita desde Google Sheets...');
-
-    try {
-        // Cargar datos de las dos hojas principales
-        const ordersURL = buildSheetURL(GOOGLE_SHEETS_CONFIG.ORDERS_SHEET);
-        const customersURL = buildSheetURL(GOOGLE_SHEETS_CONFIG.CUSTOMERS_SHEET);
-
-        console.log('[DEBUG] URLs a fetch:', { ordersURL, customersURL });
-
-        const [ordersResponse, customersResponse] = await Promise.all([
-            fetch(ordersURL),
-            fetch(customersURL)
-        ]);
-
-        console.log('[DEBUG] Respuestas de Google Sheets K-mita:', {
-            orders: { status: ordersResponse.status, statusText: ordersResponse.statusText, url: ordersResponse.url },
-            customers: { status: customersResponse.status, statusText: customersResponse.statusText, url: customersResponse.url }
-        });
-
-        // Verificar respuestas
-        if (!ordersResponse.ok) {
-            const errorText = await ordersResponse.text();
-            console.error(`[DEBUG] Error en Orders (${ordersResponse.status}):`, errorText);
-            console.error(`[DEBUG] Headers de respuesta Orders:`, Object.fromEntries(ordersResponse.headers.entries()));
-            throw new Error(`Error cargando órdenes de K-mita: ${ordersResponse.status} - ${errorText}`);
-        }
-
-        if (!customersResponse.ok) {
-            const errorText = await customersResponse.text();
-            console.error(`[DEBUG] Error en Customers (${customersResponse.status}):`, errorText);
-            console.error(`[DEBUG] Headers de respuesta Customers:`, Object.fromEntries(customersResponse.headers.entries()));
-            throw new Error(`Error cargando clientes de K-mita: ${customersResponse.status} - ${errorText}`);
-        }
-
-        // Parsear respuestas CSV de Google Sheets
-        const ordersCSV = await ordersResponse.text();
-        const customersCSV = await customersResponse.text();
-
-        console.log('Datos CSV recibidos de K-mita:', {
-            orders: ordersCSV.split('\n').length,
-            customers: customersCSV.split('\n').length
-        });
-
-        ordersData = parseGoogleSheetsCSVResponse(ordersCSV);
-        customersData = parseGoogleSheetsCSVResponse(customersCSV);
-
-        console.log('Datos K-mita procesados:', {
-            ordersCount: ordersData.length,
-            customersCount: customersData.length
-        });
-
-        // Verificar que tenemos datos
-        if (ordersData.length === 0 && customersData.length === 0) {
-            throw new Error('No hay datos de K-mita en Google Sheets. Verifica la configuración.');
-        }
-
-        isDataLoaded = true;
-        lastDataUpdate = new Date();
-
-        updateDataSourceStatus(`✅ Datos K-mita cargados: ${ordersData.length} órdenes, ${customersData.length} clientes`);
-
-        // Procesar y mostrar datos
-        processAndDisplayData();
-
-        // Inicializar funcionalidades mejoradas
-        initializeEnhancedFeatures();
-
-    } catch (error) {
-        console.error('Error cargando datos K-mita:', error);
-        updateDataSourceStatus(`❌ Error K-mita: ${error.message}`);
-        isDataLoaded = false;
-    }
-}
+// ===========================================
+// FUNCIONES DE CARGA DE DATOS
+// ===========================================
 
 // Función para actualizar el estado de la fuente de datos
 function updateDataSourceStatus(message) {
-    document.getElementById('dataSourceStatus').textContent = message;
+    const statusElement = document.getElementById('dataSourceStatus');
+    if (statusElement) {
+        statusElement.textContent = message;
+    }
+}
+
+// Mostrar ayuda de conexión
+function showConnectionHelp() {
+    const helpHTML = `
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 10px 0;">
+            <h4 style="color: #dc2626; margin: 0 0 10px 0;">🔧 Configuración Requerida para CSV Público:</h4>
+            <ol style="margin: 0; padding-left: 20px; color: #374151;">
+                <li><strong>Hacer el documento público:</strong><br>
+                      • Abre tu Google Sheets<br>
+                      • Clic en "Compartir" (botón azul arriba a la derecha)<br>
+                      • Selecciona "Cambiar a cualquier persona con el enlace puede ver"<br>
+                      • Copia el enlace y verifica que se pueda acceder sin login
+                </li>
+                <li><strong>Verificar configuración:</strong><br>
+                      • Asegurarse de que los nombres de las hojas coincidan exactamente<br>
+                      • Verificar que SHEET_ID en config.js sea correcto<br>
+                      • El dashboard usa CSV export público, NO requiere API key
+                </li>
+                <li><strong>Probar conexión:</strong><br>
+                      • Una vez público, haz clic en "Reintentar Conexión"<br>
+                      • Revisa la consola del navegador (F12) para logs detallados
+                </li>
+            </ol>
+            <button onclick="testGoogleSheetsConnection()" style="margin-top: 10px; padding: 8px 15px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                🔄 Reintentar Conexión
+            </button>
+        </div>
+    `;
+
+    const container = document.querySelector('.data-source-info');
+    if (container) {
+        container.insertAdjacentHTML('afterend', helpHTML);
+    }
 }
 
 // Función para probar la conexión a Google Sheets
@@ -219,345 +237,429 @@ async function testGoogleSheetsConnection() {
     }
 }
 
-// Mostrar ayuda de conexión
-function showConnectionHelp() {
-    const helpHTML = `
-        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 10px 0;">
-            <h4 style="color: #dc2626; margin: 0 0 10px 0;">🔧 Configuración Requerida para CSV Público:</h4>
-            <ol style="margin: 0; padding-left: 20px; color: #374151;">
-                <li><strong>Hacer el documento público:</strong><br>
-                      • Abre tu Google Sheets<br>
-                      • Clic en "Compartir" (botón azul arriba a la derecha)<br>
-                      • Selecciona "Cambiar a cualquier persona con el enlace puede ver"<br>
-                      • Copia el enlace y verifica que se pueda acceder sin login
-                </li>
-                <li><strong>Verificar configuración:</strong><br>
-                      • Asegurarse de que los nombres de las hojas coincidan exactamente<br>
-                      • Verificar que SHEET_ID en config.js sea correcto<br>
-                      • El dashboard usa CSV export público, NO requiere API key
-                </li>
-                <li><strong>Probar conexión:</strong><br>
-                      • Una vez público, haz clic en "Reintentar Conexión"<br>
-                      • Revisa la consola del navegador (F12) para logs detallados
-                </li>
-            </ol>
-            <button onclick="testGoogleSheetsConnection()" style="margin-top: 10px; padding: 8px 15px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                🔄 Reintentar Conexión
-            </button>
-        </div>
-    `;
-
-    const container = document.querySelector('.data-source-info');
-    if (container) {
-        container.insertAdjacentHTML('afterend', helpHTML);
-    }
+// Función para construir URL de Google Sheets CSV
+function buildSheetURL(sheetName) {
+    return `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEETS_CONFIG.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(sheetName)}`;
 }
 
-
-// Función principal para procesar y mostrar datos de K-mita
-function processAndDisplayData() {
-    console.log('Iniciando procesamiento de datos K-mita...');
+// Función principal para cargar datos de K-mita (versión simplificada)
+async function loadShopifyData() {
+    console.log('[LOG] Iniciando loadShopifyData - usando CSV público');
+    updateDataSourceStatus('🔄 Cargando datos de K-mita desde Google Sheets...');
 
     try {
-        console.log('Actualizando KPIs de K-mita...');
-        updateKmitaKPIs();
+        // Cargar datos de las dos hojas principales
+        const ordersURL = buildSheetURL(GOOGLE_SHEETS_CONFIG.ORDERS_SHEET);
+        const customersURL = buildSheetURL(GOOGLE_SHEETS_CONFIG.CUSTOMERS_SHEET);
 
-        console.log('Generando gráficos de K-mita...');
-        generateKmitaCharts();
+        console.log('[DEBUG] URLs a fetch:', { ordersURL, customersURL });
 
-        console.log('Poblando tablas de K-mita...');
-        populateKmitaTables();
+        const [ordersResponse, customersResponse] = await Promise.all([
+            fetch(ordersURL),
+            fetch(customersURL)
+        ]);
 
-        console.log('Generando insights de K-mita...');
-        generateKmitaInsights();
+        console.log('[DEBUG] Respuestas de Google Sheets K-mita:', {
+            orders: { status: ordersResponse.status, statusText: ordersResponse.statusText },
+            customers: { status: customersResponse.status, statusText: customersResponse.statusText }
+        });
 
-        console.log('Procesamiento K-mita completado exitosamente');
+        // Verificar respuestas
+        if (!ordersResponse.ok) {
+            const errorText = await ordersResponse.text();
+            console.error(`[DEBUG] Error en Orders (${ordersResponse.status}):`, errorText);
+            throw new Error(`Error cargando órdenes: ${ordersResponse.status}`);
+        }
+
+        if (!customersResponse.ok) {
+            const errorText = await customersResponse.text();
+            console.error(`[DEBUG] Error en Customers (${customersResponse.status}):`, errorText);
+            throw new Error(`Error cargando clientes: ${customersResponse.status}`);
+        }
+
+        // Parsear respuestas CSV
+        const ordersCSV = await ordersResponse.text();
+        const customersCSV = await customersResponse.text();
+
+        ordersData = parseGoogleSheetsCSVResponse(ordersCSV);
+        customersData = parseGoogleSheetsCSVResponse(customersCSV);
+
+        console.log('Datos K-mita cargados:', {
+            ordersCount: ordersData.length,
+            customersCount: customersData.length
+        });
+
+        isDataLoaded = true;
+        lastDataUpdate = new Date();
+
+        updateDataSourceStatus(`✅ Datos cargados: ${ordersData.length} de tabla órdenes, ${customersData.length} de tabla clientes`);
+
+        // Procesar datos
+        processAndDisplayData();
 
     } catch (error) {
-        console.error('Error procesando datos K-mita:', error);
-        updateDataSourceStatus('❌ Error procesando datos K-mita');
+        console.error('Error cargando datos K-mita:', error);
+        updateDataSourceStatus(`❌ Error: ${error.message}`);
+        isDataLoaded = false;
     }
 }
 
-// Actualizar KPIs principales con datos reales de K-mita
+// Función para parsear CSV (versión simplificada)
+function parseGoogleSheetsCSVResponse(csvText) {
+    if (!csvText || csvText.trim() === '') return [];
+
+    const lines = csvText.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return [];
+
+    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+        if (values.length > 0 && values.some(v => v !== '')) {
+            const rowData = {};
+            headers.forEach((header, index) => {
+                rowData[header] = values[index] || '';
+            });
+            data.push(rowData);
+        }
+    }
+
+    return data;
+}
+
+// ===========================================
+// FUNCIONES DE PROCESAMIENTO Y VISUALIZACIÓN
+// ===========================================
+
+// Función principal para procesar y mostrar datos
+function processAndDisplayData() {
+    console.log('Procesando datos K-mita...');
+
+    try {
+        updateKmitaKPIs();
+        generateKmitaCharts();
+        populateKmitaTables();
+        generateKmitaInsights();
+        console.log('Procesamiento completado');
+    } catch (error) {
+        console.error('Error procesando datos:', error);
+    }
+}
+
+// Función auxiliar para calcular días de fulfillment
+function calculateFulfillmentDays(createdAt, processedAt) {
+    if (!createdAt || !processedAt) return null;
+
+    try {
+        const created = new Date(createdAt);
+        const processed = new Date(processedAt);
+
+        if (isNaN(created.getTime()) || isNaN(processed.getTime())) return null;
+
+        const diffTime = processed.getTime() - created.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return diffDays > 0 ? diffDays : null;
+    } catch (error) {
+        console.warn('Error calculando días de fulfillment:', error);
+        return null;
+    }
+}
+
+// Actualizar KPIs (versión completa con métricas K-mita)
 function updateKmitaKPIs() {
-    const filteredOrders = filterOrdersByPeriod(ordersData);
-    const filteredCustomers = getUniqueCustomersFromOrders(filteredOrders);
+    const filteredOrders = filterDataByPeriod(ordersData);
 
-    console.log('[LOG] updateKmitaKPIs - filteredOrders count:', filteredOrders.length);
-    console.log('[LOG] updateKmitaKPIs - filteredCustomers count:', filteredCustomers.length);
-
-    // Calcular métricas usando estructura real de K-mita
-    const totalRevenue = filteredOrders.reduce((sum, order) => {
-        const price = parseFloat(order.total_price || order.current_total_price || 0);
-        return sum + price;
-    }, 0);
-
+    const totalRevenue = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
     const totalOrders = filteredOrders.length;
-    const uniqueCustomers = filteredCustomers.length;
+    const uniqueCustomers = new Set(filteredOrders.map(order => order.customer_email)).size;
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    console.log('[LOG] updateKmitaKPIs - totalRevenue:', totalRevenue, 'totalOrders:', totalOrders, 'uniqueCustomers:', uniqueCustomers);
+    // Calcular métricas K-mita
+    const totalKilos = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_kilos || 0), 0);
+    const totalBags = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_bags || 0), 0);
 
-    // Calcular métricas específicas de K-mita (arena para gatos)
-    const totalKilos = filteredOrders.reduce((sum, order) => {
-        const kilos = parseFloat(order.total_kilos || order.kilos || order.total_weight || 0);
-        return sum + kilos;
-    }, 0);
-
-    const totalBags = filteredOrders.reduce((sum, order) => {
-        const bags = parseFloat(order.total_bags || 0);
-        return sum + bags;
-    }, 0);
-
-    const avgPricePerKilo = totalKilos > 0 ? totalRevenue / totalKilos : 0;
-
-    console.log('[LOG] updateKmitaKPIs - totalKilos:', totalKilos, 'totalBags:', totalBags, 'avgPricePerKilo:', avgPricePerKilo);
+    // Calcular precio promedio por kilo
+    const validKiloOrders = filteredOrders.filter(order =>
+        parseFloat(order.total_kilos) > 0 && parseFloat(order.total_price) > 0
+    );
+    const avgPricePerKilo = validKiloOrders.length > 0 ?
+        validKiloOrders.reduce((sum, order) =>
+            sum + (parseFloat(order.total_price) / parseFloat(order.total_kilos)), 0
+        ) / validKiloOrders.length : 0;
 
     // Calcular días promedio de fulfillment
-    const fulfillmentDays = filteredOrders.map(order => {
-        const paidDate = new Date(order.created_at || order.order_date || order.date);
-        const fulfilledDate = new Date(order.fulfilled_at || order.updated_at || order.fulfilled_date);
-        const days = Math.ceil((fulfilledDate - paidDate) / (1000 * 60 * 60 * 24));
-        console.log('[LOG] updateKmitaKPIs - order fulfillment:', {
-            order_id: order.id || order.order_number,
-            created_at: order.created_at,
-            order_date: order.order_date,
-            fulfilled_at: order.fulfilled_at,
-            updated_at: order.updated_at,
-            paidDate: paidDate,
-            fulfilledDate: fulfilledDate,
-            days: days
-        });
-        return days;
-    }).filter(days => !isNaN(days) && days > 0);
-    const avgFulfillmentDays = fulfillmentDays.length > 0 ? fulfillmentDays.reduce((sum, days) => sum + days, 0) / fulfillmentDays.length : 0;
+    console.log('[DEBUG] Calculando fulfillment days. Primeras órdenes:', filteredOrders.slice(0, 3).map(o => ({
+        created_at: o.created_at,
+        processed_at: o.processed_at,
+        fulfillment_created_at: o.fulfillment_created_at,
+        updated_at: o.updated_at,
+        fulfillment_status: o.fulfillment_status
+    })));
 
-    console.log('[LOG] updateKmitaKPIs - fulfillmentDays array:', fulfillmentDays, 'avgFulfillmentDays:', avgFulfillmentDays);
+    const fulfillmentDays = filteredOrders
+        .map(order => {
+            // Usar fulfillment_created_at si existe, sino processed_at
+            const fulfillmentDate = order.fulfillment_created_at || order.processed_at;
+            return calculateFulfillmentDays(order.created_at, fulfillmentDate);
+        })
+        .filter(days => days !== null && days >= 0);
 
-    // Actualizar DOM con formato mexicano usando configuración K-mita
-    updateElementIfExists('totalRevenue', formatCurrency(totalRevenue));
-    updateElementIfExists('totalOrders', formatNumber(totalOrders));
-    updateElementIfExists('uniqueCustomers', formatNumber(uniqueCustomers));
-    updateElementIfExists('avgOrderValue', formatCurrency(avgOrderValue));
+    console.log('[DEBUG] Días de fulfillment calculados:', fulfillmentDays.slice(0, 10));
 
-    // Actualizar métricas adicionales si existen elementos en el DOM
-    updateElementIfExists('totalKilos', `${totalKilos.toFixed(1)} kg`);
-    updateElementIfExists('totalBags', totalBags.toLocaleString());
-    updateElementIfExists('avgPricePerKilo', `$${avgPricePerKilo.toFixed(2)}/kg`);
-    updateElementIfExists('avgFulfillmentDays', `${avgFulfillmentDays.toFixed(1)} días`);
+    const avgFulfillmentDays = fulfillmentDays.length > 0 ?
+        fulfillmentDays.reduce((sum, days) => sum + days, 0) / fulfillmentDays.length : 0;
 
-    // Calcular cambios comparando con período anterior
-    calculateAndUpdateChanges(filteredOrders, totalRevenue, totalOrders, uniqueCustomers, avgOrderValue);
+    // Actualizar DOM
+    const elements = {
+        totalRevenue: formatCurrency(totalRevenue),
+        totalOrders: totalOrders.toLocaleString(),
+        uniqueCustomers: uniqueCustomers.toLocaleString(),
+        avgOrderValue: formatCurrency(avgOrderValue),
+        totalKilos: totalKilos.toLocaleString() + ' kg',
+        totalBags: totalBags.toLocaleString(),
+        avgPricePerKilo: formatCurrency(avgPricePerKilo),
+        avgFulfillmentDays: avgFulfillmentDays.toFixed(1) + ' días'
+    };
+
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    });
+
+    console.log('KPIs K-mita actualizados:', {
+        totalKilos,
+        totalBags,
+        avgPricePerKilo,
+        avgFulfillmentDays,
+        fulfillmentDaysCount: fulfillmentDays.length
+    });
 }
 
-// Función auxiliar para actualizar elementos del DOM si existen
-function updateElementIfExists(elementId, value) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.textContent = value;
-    }
-}
-
-// Funciones de formato
+// Función de formato de moneda
 function formatCurrency(amount) {
     return `$${parseFloat(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 }
 
-function formatNumber(num) {
-    return parseInt(num).toLocaleString('es-MX');
-}
+// ===========================================
+// FUNCIONES AUXILIARES PARA CÁLCULOS
+// ===========================================
 
-// Actualizar KPIs principales
-function updateKPIs() {
-    const filteredOrders = filterOrdersByPeriod(ordersData);
-    const filteredCustomers = getUniqueCustomers(filteredOrders);
+// Función para agregar datos por cliente
+function aggregateCustomerData(ordersData) {
+    const customerMap = new Map();
 
-    // Calcular métricas
-    const totalRevenue = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
-    const totalOrders = filteredOrders.length;
-    const uniqueCustomers = filteredCustomers.length;
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    ordersData.forEach(order => {
+        const email = order.customer_email?.toLowerCase().trim();
+        if (!email) return;
 
-    // Actualizar DOM
-    document.getElementById('totalRevenue').textContent = `$${totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
-    document.getElementById('totalOrders').textContent = totalOrders.toLocaleString();
-    document.getElementById('uniqueCustomers').textContent = uniqueCustomers.toLocaleString();
-    document.getElementById('avgOrderValue').textContent = `$${avgOrderValue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+        if (!customerMap.has(email)) {
+            customerMap.set(email, {
+                email,
+                orders: [],
+                totalSpent: 0,
+                totalOrders: 0,
+                totalKilos: 0,
+                totalBags: 0,
+                firstOrder: null,
+                lastOrder: null,
+                states: new Set(),
+                paymentMethods: new Set(),
+                acceptsMarketing: order.accepts_marketing
+            });
+        }
 
-    // Calcular cambios (si hay datos históricos)
-    updateKPIChanges(totalRevenue, totalOrders, uniqueCustomers, avgOrderValue);
-}
+        const customer = customerMap.get(email);
+        customer.orders.push(order);
+        customer.totalSpent += parseFloat(order.total_price || 0);
+        customer.totalOrders += 1;
+        customer.totalKilos += parseFloat(order.total_kilos || 0);
+        customer.totalBags += parseFloat(order.total_bags || 0);
 
-// Filtrar órdenes por período seleccionado usando estructura K-mita
-function filterOrdersByPeriod(orders) {
-    if (currentPeriod === 'all') return orders;
+        if (order.shipping_province) customer.states.add(order.shipping_province);
+        if (order.payment_method) customer.paymentMethods.add(order.payment_method);
 
-    const now = new Date();
-    const periodMap = {
-        '1m': 1,
-        '3m': 3,
-        '6m': 6,
-        '12m': 12
-    };
-
-    const monthsBack = periodMap[currentPeriod];
-    if (!monthsBack) return orders;
-
-    const cutoffDate = new Date();
-    cutoffDate.setMonth(cutoffDate.getMonth() - monthsBack);
-
-    return orders.filter(order => {
-        // Usar created_at de la estructura K-mita
-        const dateField = order.created_at || order.order_date;
-        if (!dateField) return false;
-
-        const orderDate = new Date(dateField);
-        if (isNaN(orderDate.getTime())) return false;
-
-        return orderDate >= cutoffDate;
+        const orderDate = new Date(order.created_at);
+        if (!isNaN(orderDate.getTime())) {
+            if (!customer.firstOrder || orderDate < customer.firstOrder) {
+                customer.firstOrder = orderDate;
+            }
+            if (!customer.lastOrder || orderDate > customer.lastOrder) {
+                customer.lastOrder = orderDate;
+            }
+        }
     });
+
+    return Array.from(customerMap.values()).map(customer => ({
+        ...customer,
+        avgOrderValue: customer.totalOrders > 0 ? customer.totalSpent / customer.totalOrders : 0,
+        avgPricePerKilo: customer.totalKilos > 0 ? customer.totalSpent / customer.totalKilos : 0,
+        avgPricePerBag: customer.totalBags > 0 ? customer.totalSpent / customer.totalBags : 0,
+        primaryState: Array.from(customer.states)[0] || 'N/A',
+        daysSinceLastOrder: customer.lastOrder ? Math.floor((new Date() - customer.lastOrder) / (1000 * 60 * 60 * 24)) : null,
+        segment: getCustomerSegment(customer)
+    }));
 }
 
-// Obtener clientes únicos de las órdenes filtradas usando estructura K-mita
-function getUniqueCustomersFromOrders(orders) {
-    console.log('[LOG] getUniqueCustomersFromOrders - orders count:', orders.length);
-    const customerEmails = orders.map(order => order.customer_email || order.email).filter(email => email);
-    console.log('[LOG] getUniqueCustomersFromOrders - customerEmails found:', customerEmails);
-    const uniqueCustomerEmails = [...new Set(customerEmails)];
-    console.log('[LOG] getUniqueCustomersFromOrders - uniqueCustomerEmails:', uniqueCustomerEmails);
-    const filteredCustomers = customersData.filter(customer => uniqueCustomerEmails.includes(customer.email));
-    console.log('[LOG] getUniqueCustomersFromOrders - customersData count:', customersData.length);
-    console.log('[LOG] getUniqueCustomersFromOrders - filteredCustomers count:', filteredCustomers.length);
-    return filteredCustomers;
+// Función para determinar segmento de cliente
+function getCustomerSegment(customer) {
+    if (customer.totalOrders >= 10) return 'VIP';
+    if (customer.totalOrders >= 5) return 'Frecuente';
+    if (customer.totalOrders >= 2) return 'Regular';
+    return 'Nuevo';
 }
 
-// Calcular y actualizar cambios en KPIs
-function calculateAndUpdateChanges(currentOrders, revenue, orders, customers, avgOrder) {
-    // Obtener datos del período anterior para comparación
-    const previousPeriodOrders = getPreviousPeriodOrders(currentOrders);
+// Función para calcular ventas mensuales
+function calculateMonthlySales(ordersData) {
+    const monthlyData = {};
 
-    if (previousPeriodOrders.length > 0) {
-        const prevRevenue = previousPeriodOrders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
-        const prevOrders = previousPeriodOrders.length;
-        const prevCustomers = getUniqueCustomersFromOrders(previousPeriodOrders).length;
-        const prevAvgOrder = prevOrders > 0 ? prevRevenue / prevOrders : 0;
+    ordersData.forEach(order => {
+        const date = new Date(order.created_at);
+        if (isNaN(date.getTime())) return;
 
-        // Calcular porcentajes de cambio
-        const revenueChange = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue * 100).toFixed(1) : 0;
-        const ordersChange = prevOrders > 0 ? ((orders - prevOrders) / prevOrders * 100).toFixed(1) : 0;
-        const customersChange = prevCustomers > 0 ? ((customers - prevCustomers) / prevCustomers * 100).toFixed(1) : 0;
-        const avgOrderChange = prevAvgOrder > 0 ? ((avgOrder - prevAvgOrder) / prevAvgOrder * 100).toFixed(1) : 0;
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const revenue = parseFloat(order.total_price || 0);
+        const kilos = parseFloat(order.total_kilos || 0);
+        const bags = parseFloat(order.total_bags || 0);
 
-        // Actualizar elementos de cambio
-        updateElementIfExists('revenueChange', `${revenueChange >= 0 ? '+' : ''}${revenueChange}%`);
-        updateElementIfExists('ordersChange', `${ordersChange >= 0 ? '+' : ''}${ordersChange}%`);
-        updateElementIfExists('customersChange', `${customersChange >= 0 ? '+' : ''}${customersChange}%`);
-        updateElementIfExists('aovChange', `${avgOrderChange >= 0 ? '+' : ''}${avgOrderChange}%`);
-    } else {
-        // Si no hay datos previos, mostrar valores por defecto
-        updateElementIfExists('revenueChange', 'N/A');
-        updateElementIfExists('ordersChange', 'N/A');
-        updateElementIfExists('customersChange', 'N/A');
-        updateElementIfExists('aovChange', 'N/A');
-    }
-}
+        if (!monthlyData[monthKey]) {
+            monthlyData[monthKey] = {
+                revenue: 0,
+                orders: 0,
+                kilos: 0,
+                bags: 0,
+                customers: new Set()
+            };
+        }
 
-// Obtener órdenes del período anterior para comparación
-function getPreviousPeriodOrders(currentOrders) {
-    if (currentPeriod === 'all' || currentOrders.length === 0) return [];
-
-    const periodMap = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
-    const monthsBack = periodMap[currentPeriod];
-    if (!monthsBack) return [];
-
-    const now = new Date();
-    const currentCutoff = new Date();
-    currentCutoff.setMonth(currentCutoff.getMonth() - monthsBack);
-
-    const previousCutoff = new Date();
-    previousCutoff.setMonth(previousCutoff.getMonth() - (monthsBack * 2));
-
-    return ordersData.filter(order => {
-        const dateField = order.created_at || order.order_date;
-        if (!dateField) return false;
-
-        const orderDate = new Date(dateField);
-        if (isNaN(orderDate.getTime())) return false;
-
-        return orderDate >= previousCutoff && orderDate < currentCutoff;
+        monthlyData[monthKey].revenue += revenue;
+        monthlyData[monthKey].orders += 1;
+        monthlyData[monthKey].kilos += kilos;
+        monthlyData[monthKey].bags += bags;
+        if (order.customer_email) monthlyData[monthKey].customers.add(order.customer_email.toLowerCase());
     });
+
+    return Object.entries(monthlyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, data]) => ({
+            month,
+            revenue: data.revenue,
+            orders: data.orders,
+            kilos: data.kilos,
+            bags: data.bags,
+            customers: data.customers.size,
+            avgOrderValue: data.orders > 0 ? data.revenue / data.orders : 0,
+            avgFulfillmentDays: calculateAvgFulfillmentForMonth(ordersData, month)
+        }));
 }
 
+// Función para calcular fulfillment promedio por mes
+function calculateAvgFulfillmentForMonth(ordersData, month) {
+    const monthOrders = ordersData.filter(order => {
+        const date = new Date(order.created_at);
+        return !isNaN(date.getTime()) &&
+               `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` === month;
+    });
 
-// Obtener clientes únicos de las órdenes filtradas
-function getUniqueCustomers(orders) {
-    const uniqueCustomerIds = [...new Set(orders.map(order => order.customer_id).filter(id => id))];
-    return customersData.filter(customer => uniqueCustomerIds.includes(customer.customer_id));
+    const fulfillmentDays = monthOrders
+        .map(order => calculateFulfillmentDays(order.created_at, order.processed_at || order.fulfillment_created_at))
+        .filter(days => days !== null && days >= 0);
+
+    return fulfillmentDays.length > 0 ? fulfillmentDays.reduce((sum, days) => sum + days, 0) / fulfillmentDays.length : 0;
 }
 
-// Actualizar cambios en KPIs (comparación con período anterior)
-function updateKPIChanges(revenue, orders, customers, avgOrder) {
-    // Por simplicidad, mostrar cambios positivos
-    document.getElementById('revenueChange').textContent = '+12.5%';
-    document.getElementById('ordersChange').textContent = '+8.3%';
-    document.getElementById('customersChange').textContent = '+15.2%';
-    document.getElementById('aovChange').textContent = '+4.1%';
+// Función para calcular top productos
+function calculateTopProducts(ordersData) {
+    const productMap = new Map();
+
+    ordersData.forEach(order => {
+        const kilos = parseFloat(order.total_kilos || 0);
+        if (kilos <= 0) return;
+
+        const productKey = `${kilos}kg`;
+        if (!productMap.has(productKey)) {
+            productMap.set(productKey, { kilos, totalSold: 0, revenue: 0, orders: 0 });
+        }
+
+        const product = productMap.get(productKey);
+        product.totalSold += kilos;
+        product.revenue += parseFloat(order.total_price || 0);
+        product.orders += 1;
+    });
+
+    return Array.from(productMap.values())
+        .sort((a, b) => b.totalSold - a.totalSold)
+        .map(product => ({
+            ...product,
+            avgPricePerKilo: product.totalSold > 0 ? product.revenue / product.totalSold : 0
+        }));
 }
 
-// Generar todos los gráficos específicos de K-mita
+// ===========================================
+// FUNCIONES DE GRÁFICAS
+// ===========================================
+
+// Generar todas las gráficas K-mita
 function generateKmitaCharts() {
-    generateSalesTrendChart();
-    generateCustomerSegmentChart();
-    generateProductAnalysisChart();
-    generateGeographicChart();
-    generatePaymentMethodsChart();
-    generateFulfillmentChart();
-    generateMarketingChart();
-    generateKilosAnalysisChart();
-    generateKilosChart();
-    generateBagsChart();
-    generateStatesChart();
+    console.log('Generando gráficas K-mita con datos filtrados...');
+
+    const filteredOrders = filterDataByPeriod(ordersData);
+
+    try {
+        generateSalesTrendChart(filteredOrders);
+        generateCustomerSegmentChart(filteredOrders);
+        generateTopProductsChart(filteredOrders);
+        generateGeographicChart(filteredOrders);
+        generatePaymentMethodsChart(filteredOrders);
+        generateFulfillmentChart(filteredOrders);
+        generateMarketingPerformanceChart(filteredOrders);
+        generateDiscountChart(filteredOrders);
+        generateKilosChart(filteredOrders);
+        generateBagsChart(filteredOrders);
+        generateSalesByStateChart(filteredOrders);
+        generateStatesChart(filteredOrders);
+
+        console.log('Todas las gráficas generadas exitosamente');
+    } catch (error) {
+        console.error('Error generando gráficas:', error);
+    }
 }
 
-// Gráfico de tendencia de ventas
-function generateSalesTrendChart() {
-    const ctx = document.getElementById('salesTrendChart').getContext('2d');
+// Gráfica de tendencia de ventas mensuales
+function generateSalesTrendChart(ordersData) {
+    const monthlyData = calculateMonthlySales(ordersData);
 
-    // Destruir chart existente si existe
-    if (window.salesTrendChart && typeof window.salesTrendChart.destroy === 'function') {
-        window.salesTrendChart.destroy();
-    }
+    const ctx = document.getElementById('salesTrendChart');
+    if (!ctx) return;
 
-    // Procesar datos mensuales
-    const monthlyData = processMonthlyData(ordersData);
-
-    window.salesTrendChart = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'line',
         data: {
-            labels: monthlyData.labels,
+            labels: monthlyData.map(d => d.month),
             datasets: [{
-                label: 'Ingresos',
-                data: monthlyData.revenue,
+                label: 'Ingresos (MXN)',
+                data: monthlyData.map(d => d.revenue),
                 borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                fill: true
+                fill: true,
+                tension: 0.4
             }]
         },
         options: {
             responsive: true,
             plugins: {
-                legend: {
-                    display: false
+                title: {
+                    display: true,
+                    text: '📈 Tendencia de Ventas Mensuales'
                 }
             },
             scales: {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function (value) {
-                            return '$' + value.toLocaleString();
+                        callback: function(value) {
+                            return '$' + value.toLocaleString('es-MX');
                         }
                     }
                 }
@@ -566,404 +668,181 @@ function generateSalesTrendChart() {
     });
 }
 
-// Gráfico de análisis de productos K-mita (arena para gatos)
-function generateProductAnalysisChart() {
+// Gráfica de segmentación de clientes
+function generateCustomerSegmentChart(ordersData) {
+    const customers = aggregateCustomerData(ordersData);
+    const segments = {};
+
+    customers.forEach(customer => {
+        segments[customer.segment] = (segments[customer.segment] || 0) + 1;
+    });
+
+    const ctx = document.getElementById('customerSegmentChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(segments),
+            datasets: [{
+                data: Object.values(segments),
+                backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '👥 Segmentación de Clientes'
+                }
+            }
+        }
+    });
+}
+
+// Gráfica de top productos
+function generateTopProductsChart(ordersData) {
+    const topProducts = calculateTopProducts(ordersData).slice(0, 5);
+
     const ctx = document.getElementById('topProductsChart');
     if (!ctx) return;
 
-    // Destruir chart existente si existe
-    if (window.topProductsChart && typeof window.topProductsChart.destroy === 'function') {
-        window.topProductsChart.destroy();
-    }
-
-    const productData = processKmitaProductData(ordersData);
-
-    window.topProductsChart = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: productData.labels,
+            labels: topProducts.map(p => `${p.kilos}kg`),
             datasets: [{
                 label: 'Kilos Vendidos',
-                data: productData.kilos,
-                backgroundColor: '#92400e',
-                borderRadius: 4
+                data: topProducts.map(p => p.totalSold),
+                backgroundColor: '#8b5cf6'
             }]
         },
         options: {
             responsive: true,
             plugins: {
-                legend: {
-                    display: false
-                },
                 title: {
                     display: true,
-                    text: 'Productos K-mita más Vendidos (por Kilos)'
+                    text: '🏆 Top Productos por Kilos'
                 }
             },
             scales: {
                 y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Kilos'
-                    }
+                    beginAtZero: true
                 }
             }
         }
     });
 }
 
-// Gráfico específico para análisis de kilos K-mita
-function generateKilosAnalysisChart() {
-    const ctx = document.getElementById('discountChart');
-    if (!ctx) return;
+// Gráfica geográfica
+function generateGeographicChart(ordersData) {
+    const stateSales = {};
 
-    // Destruir chart existente si existe
-    if (window.discountChart && typeof window.discountChart.destroy === 'function') {
-        window.discountChart.destroy();
-    }
-
-    const monthlyData = processMonthlyData(ordersData);
-
-    window.discountChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: monthlyData.labels,
-            datasets: [{
-                label: 'Kilos Vendidos',
-                data: monthlyData.kilos,
-                borderColor: '#92400e',
-                backgroundColor: 'rgba(146, 64, 14, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: 'Tendencia de Kilos Vendidos'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Kilos'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Gráfico de kilos vendidos por mes
-function generateKilosChart() {
-    const ctx = document.getElementById('kilosChart');
-    if (!ctx) return;
-
-    // Destruir chart existente si existe
-    if (window.kilosChart && typeof window.kilosChart.destroy === 'function') {
-        window.kilosChart.destroy();
-    }
-
-    const monthlyData = processMonthlyData(ordersData);
-
-    window.kilosChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: monthlyData.labels,
-            datasets: [{
-                label: 'Kilos Vendidos',
-                data: monthlyData.kilos,
-                backgroundColor: '#92400e'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: 'Kilos Vendidos por Mes'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Kilos'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Gráfico de bolsas vendidas por mes
-function generateBagsChart() {
-    const ctx = document.getElementById('bagsChart');
-    if (!ctx) return;
-
-    // Destruir chart existente si existe
-    if (window.bagsChart && typeof window.bagsChart.destroy === 'function') {
-        window.bagsChart.destroy();
-    }
-
-    const monthlyData = processMonthlyData(ordersData);
-
-    window.bagsChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: monthlyData.labels,
-            datasets: [{
-                label: 'Bolsas Vendidas',
-                data: monthlyData.bags,
-                backgroundColor: '#065f46'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: 'Bolsas Vendidas por Mes'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Bolsas'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Gráfico de ventas por estado
-function generateStatesChart() {
-    const ctx = document.getElementById('statesChart');
-    if (!ctx) return;
-
-    // Destruir chart existente si existe
-    if (window.statesChart && typeof window.statesChart.destroy === 'function') {
-        window.statesChart.destroy();
-    }
-
-    const geoData = processGeographicData(ordersData);
-
-    window.statesChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: geoData.labels,
-            datasets: [{
-                label: 'Ventas por Estado',
-                data: geoData.values,
-                backgroundColor: '#6366f1'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: 'Ventas por Estado'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function (value) {
-                            return '$' + value.toLocaleString();
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Procesar datos de productos K-mita
-function processKmitaProductData(orders) {
-    const products = {};
-
-    orders.forEach(order => {
-        // Usar product_details o product_titles de la estructura K-mita
-        const productInfo = order.product_details || order.product_titles || 'Arena Biodegradable';
-        const kilos = parseFloat(order.total_kilos || order.kilos || order.total_weight || 0);
-
-        if (productInfo && kilos > 0) {
-            // Simplificar nombres de productos para mejor visualización
-            let productName = productInfo;
-            if (productName.length > 30) {
-                productName = productName.substring(0, 30) + '...';
-            }
-
-            products[productName] = (products[productName] || 0) + kilos;
-        }
+    ordersData.forEach(order => {
+        const state = order.shipping_province || 'No especificado';
+        stateSales[state] = (stateSales[state] || 0) + parseFloat(order.total_price || 0);
     });
 
-    const sortedProducts = Object.entries(products)
-        .sort(([, a], [, b]) => b - a)
+    const sortedStates = Object.entries(stateSales)
+        .sort(([,a], [,b]) => b - a)
         .slice(0, 10);
 
-    return {
-        labels: sortedProducts.map(([product]) => product),
-        kilos: sortedProducts.map(([, kilos]) => kilos)
-    };
-}
+    const ctx = document.getElementById('geographicChart');
+    if (!ctx) return;
 
-// Gráfico de segmentación de clientes
-function generateCustomerSegmentChart() {
-    const ctx = document.getElementById('customerSegmentChart').getContext('2d');
-
-    // Destruir chart existente si existe
-    if (window.customerSegmentChart && typeof window.customerSegmentChart.destroy === 'function') {
-        window.customerSegmentChart.destroy();
-    }
-
-    const segments = processCustomerSegments(customersData);
-
-    window.customerSegmentChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: segments.labels,
-            datasets: [{
-                data: segments.values,
-                backgroundColor: [
-                    '#3b82f6',
-                    '#10b981',
-                    '#f59e0b',
-                    '#ef4444',
-                    '#8b5cf6'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-}
-
-// Gráfico geográfico
-function generateGeographicChart() {
-    const ctx = document.getElementById('geographicChart').getContext('2d');
-
-    // Destruir chart existente si existe
-    if (window.geographicChart && typeof window.geographicChart.destroy === 'function') {
-        window.geographicChart.destroy();
-    }
-
-    const geoData = processGeographicData(ordersData);
-
-    window.geographicChart = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: geoData.labels,
+            labels: sortedStates.map(([state]) => state),
             datasets: [{
-                label: 'Órdenes por región',
-                data: geoData.values,
-                backgroundColor: '#6366f1'
-            }]
-        },
-        options: {
-            responsive: true,
-            indexAxis: 'y',
-            plugins: {
-                legend: {
-                    display: false
-                }
-            }
-        }
-    });
-}
-
-// Gráfico de métodos de pago
-function generatePaymentMethodsChart() {
-    const ctx = document.getElementById('paymentMethodsChart').getContext('2d');
-
-    // Destruir chart existente si existe
-    if (window.paymentMethodsChart && typeof window.paymentMethodsChart.destroy === 'function') {
-        window.paymentMethodsChart.destroy();
-    }
-
-    const paymentData = processPaymentMethodsData(ordersData);
-
-    window.paymentMethodsChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: paymentData.labels,
-            datasets: [{
-                data: paymentData.values,
-                backgroundColor: [
-                    '#3b82f6',
-                    '#10b981',
-                    '#f59e0b',
-                    '#ef4444',
-                    '#8b5cf6'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-}
-
-// Gráfico de fulfillment
-function generateFulfillmentChart() {
-    const ctx = document.getElementById('fulfillmentChart').getContext('2d');
-
-    // Destruir chart existente si existe
-    if (window.fulfillmentChart && typeof window.fulfillmentChart.destroy === 'function') {
-        window.fulfillmentChart.destroy();
-    }
-
-    const fulfillmentData = processFulfillmentData(ordersData);
-
-    window.fulfillmentChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: fulfillmentData.labels,
-            datasets: [{
-                label: 'Días promedio',
-                data: fulfillmentData.values,
+                label: 'Ventas (MXN)',
+                data: sortedStates.map(([, sales]) => sales),
                 backgroundColor: '#06b6d4'
             }]
         },
         options: {
+            indexAxis: 'y',
             responsive: true,
             plugins: {
-                legend: {
-                    display: false
+                title: {
+                    display: true,
+                    text: '🌎 Ventas por Región'
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString('es-MX');
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfica de métodos de pago
+function generatePaymentMethodsChart(ordersData) {
+    const paymentMethods = {};
+
+    ordersData.forEach(order => {
+        const method = order.payment_method || 'No especificado';
+        paymentMethods[method] = (paymentMethods[method] || 0) + 1;
+    });
+
+    const ctx = document.getElementById('paymentMethodsChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(paymentMethods),
+            datasets: [{
+                data: Object.values(paymentMethods),
+                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '💳 Métodos de Pago'
+                }
+            }
+        }
+    });
+}
+
+// Gráfica de tiempo de fulfillment
+function generateFulfillmentChart(ordersData) {
+    const monthlyData = calculateMonthlySales(ordersData);
+
+    const ctx = document.getElementById('fulfillmentChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: monthlyData.map(d => d.month),
+            datasets: [{
+                label: 'Días Promedio',
+                data: monthlyData.map(d => d.avgFulfillmentDays),
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '📦 Tiempo de Fulfillment'
                 }
             },
             scales: {
@@ -979,63 +858,39 @@ function generateFulfillmentChart() {
     });
 }
 
-// Gráfico de marketing
-function generateMarketingChart() {
-    const ctx = document.getElementById('marketingChart').getContext('2d');
+// Gráfica de performance de marketing
+function generateMarketingPerformanceChart(ordersData) {
+    let acceptsMarketing = 0;
+    let totalOrders = 0;
 
-    // Destruir chart existente si existe
-    if (window.marketingChart && typeof window.marketingChart.destroy === 'function') {
-        window.marketingChart.destroy();
-    }
-
-    const marketingData = processMarketingData(ordersData);
-
-    window.marketingChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Email Suscrito', 'SMS Suscrito', 'Sin Marketing'],
-            datasets: [{
-                data: marketingData.values,
-                backgroundColor: ['#10b981', '#3b82f6', '#6b7280']
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
+    ordersData.forEach(order => {
+        totalOrders++;
+        if (order.accepts_marketing === true || order.accepts_marketing === 'true' || order.accepts_marketing === 'TRUE') {
+            acceptsMarketing++;
         }
     });
-}
 
-// Gráfico de descuentos
-function generateDiscountChart() {
-    const ctx = document.getElementById('discountChart').getContext('2d');
+    const marketingRate = totalOrders > 0 ? (acceptsMarketing / totalOrders * 100).toFixed(1) : 0;
 
-    // Destruir chart existente si existe
-    if (window.discountChart && typeof window.discountChart.destroy === 'function') {
-        window.discountChart.destroy();
-    }
+    const ctx = document.getElementById('marketingPerformanceChart');
+    if (!ctx) return;
 
-    const discountData = processDiscountData(ordersData);
-
-    window.discountChart = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Con Descuento', 'Sin Descuento'],
+            labels: ['Acepta Marketing', 'No Acepta Marketing'],
             datasets: [{
-                label: 'Órdenes',
-                data: discountData.values,
-                backgroundColor: ['#f59e0b', '#6b7280']
+                label: 'Número de Órdenes',
+                data: [acceptsMarketing, totalOrders - acceptsMarketing],
+                backgroundColor: ['#10b981', '#ef4444']
             }]
         },
         options: {
             responsive: true,
             plugins: {
-                legend: {
-                    display: false
+                title: {
+                    display: true,
+                    text: `📧 Performance de Marketing (${marketingRate}% aceptación)`
                 }
             },
             scales: {
@@ -1047,588 +902,695 @@ function generateDiscountChart() {
     });
 }
 
-// Procesar datos de descuentos
-function processDiscountData(orders) {
-    let withDiscount = 0;
-    let withoutDiscount = 0;
+// Gráfica de impacto de descuentos
+function generateDiscountChart(ordersData) {
+    const discountRanges = {
+        'Sin descuento': 0,
+        '1-10%': 0,
+        '11-25%': 0,
+        '26-50%': 0,
+        '50%+': 0
+    };
 
-    orders.forEach(order => {
-        if (order.has_discount === 'true' || parseFloat(order.total_discounts || 0) > 0) {
-            withDiscount++;
-        } else {
-            withoutDiscount++;
-        }
+    ordersData.forEach(order => {
+        const total = parseFloat(order.total_price || 0);
+        const discount = parseFloat(order.total_discounts || 0);
+        const discountPercent = total > 0 ? (discount / total) * 100 : 0;
+
+        if (discountPercent === 0) discountRanges['Sin descuento']++;
+        else if (discountPercent <= 10) discountRanges['1-10%']++;
+        else if (discountPercent <= 25) discountRanges['11-25%']++;
+        else if (discountPercent <= 50) discountRanges['26-50%']++;
+        else discountRanges['50%+']++;
     });
 
-    return {
-        values: [withDiscount, withoutDiscount]
-    };
-}
+    const ctx = document.getElementById('discountChart');
+    if (!ctx) return;
 
-// Procesar datos mensuales usando estructura K-mita
-function processMonthlyData(orders) {
-    const monthlyStats = {};
-
-    orders.forEach(order => {
-        const dateField = order.created_at || order.order_date;
-        if (!dateField) return;
-
-        const date = new Date(dateField);
-        if (isNaN(date.getTime())) return;
-
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-        if (!monthlyStats[monthKey]) {
-            monthlyStats[monthKey] = {
-                revenue: 0,
-                orders: 0,
-                kilos: 0,
-                bags: 0,
-                customers: new Set()
-            };
-        }
-
-        monthlyStats[monthKey].revenue += parseFloat(order.total_price || order.current_total_price || 0);
-        monthlyStats[monthKey].orders += 1;
-        monthlyStats[monthKey].kilos += parseFloat(order.total_kilos || order.kilos || order.total_weight || 0);
-        monthlyStats[monthKey].bags += parseFloat(order.total_bags || 0);
-
-        if (order.customer_email) {
-            monthlyStats[monthKey].customers.add(order.customer_email);
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(discountRanges),
+            datasets: [{
+                label: 'Número de Órdenes',
+                data: Object.values(discountRanges),
+                backgroundColor: '#8b5cf6'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '🎯 Impacto de Descuentos'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
         }
     });
-
-    const sortedMonths = Object.keys(monthlyStats).sort();
-
-    return {
-        labels: sortedMonths.map(month => {
-            const [year, monthNum] = month.split('-');
-            return new Date(year, monthNum - 1).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
-        }),
-        revenue: sortedMonths.map(month => monthlyStats[month].revenue),
-        orders: sortedMonths.map(month => monthlyStats[month].orders),
-        kilos: sortedMonths.map(month => monthlyStats[month].kilos),
-        bags: sortedMonths.map(month => monthlyStats[month].bags),
-        customers: sortedMonths.map(month => monthlyStats[month].customers.size)
-    };
 }
 
-// Procesar segmentos de clientes
-function processCustomerSegments(customers) {
-    const segments = {};
+// Gráfica de kilos vendidos por mes
+function generateKilosChart(ordersData) {
+    const monthlyData = calculateMonthlySales(ordersData);
+
+    const ctx = document.getElementById('kilosChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: monthlyData.map(d => d.month),
+            datasets: [{
+                label: 'Kilos Vendidos',
+                data: monthlyData.map(d => d.kilos),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '☕ Kilos Vendidos por Mes'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Kilos'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfica de bolsas vendidas por mes
+function generateBagsChart(ordersData) {
+    const monthlyData = calculateMonthlySales(ordersData);
+
+    const ctx = document.getElementById('bagsChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: monthlyData.map(d => d.month),
+            datasets: [{
+                label: 'Bolsas Vendidas',
+                data: monthlyData.map(d => d.bags),
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '🛍️ Bolsas Vendidas por Mes'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Bolsas'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfica de ventas por estado (top 10)
+function generateSalesByStateChart(ordersData) {
+    const stateSales = {};
+
+    ordersData.forEach(order => {
+        const state = order.shipping_province || 'No especificado';
+        stateSales[state] = (stateSales[state] || 0) + parseFloat(order.total_price || 0);
+    });
+
+    const sortedStates = Object.entries(stateSales)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10);
+
+    const ctx = document.getElementById('salesByStateChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedStates.map(([state]) => state),
+            datasets: [{
+                label: 'Ventas (MXN)',
+                data: sortedStates.map(([, sales]) => sales),
+                backgroundColor: '#06b6d4'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '🌎 Ventas por Estado (Top 10)'
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString('es-MX');
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfica de distribución de ventas por estado
+function generateStatesChart(ordersData) {
+    const stateSales = {};
+
+    ordersData.forEach(order => {
+        const state = order.shipping_province || 'No especificado';
+        stateSales[state] = (stateSales[state] || 0) + parseFloat(order.total_price || 0);
+    });
+
+    const ctx = document.getElementById('statesChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: Object.keys(stateSales),
+            datasets: [{
+                data: Object.values(stateSales),
+                backgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                    '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '🌎 Distribución de Ventas por Estado'
+                }
+            }
+        }
+    });
+}
+
+// ===========================================
+// FUNCIONES DE TABLAS
+// ===========================================
+
+// Poblar todas las tablas K-mita
+function populateKmitaTables() {
+    console.log('Poblando tablas K-mita con datos filtrados...');
+
+    const filteredOrders = filterDataByPeriod(ordersData);
+
+    try {
+        populateTopCustomersTable(filteredOrders);
+        populateMonthlyAnalysisTable(filteredOrders);
+        populateCustomersAnalysisTable(filteredOrders);
+        populateOrdersAnalysisTable(filteredOrders);
+        populateDetailedAnalysisTable(filteredOrders);
+
+        console.log('Todas las tablas pobladas exitosamente');
+    } catch (error) {
+        console.error('Error poblando tablas:', error);
+    }
+}
+
+// Tabla de top clientes
+function populateTopCustomersTable(ordersData) {
+    const customers = aggregateCustomerData(ordersData)
+        .sort((a, b) => b.totalSpent - a.totalSpent)
+        .slice(0, 10);
+
+    const tbody = document.getElementById('topCustomersBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    customers.forEach((customer, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${customer.email}</td>
+            <td>${customer.totalOrders}</td>
+            <td>${formatCurrency(customer.totalSpent)}</td>
+            <td>${formatCurrency(customer.avgOrderValue)}</td>
+            <td>${customer.segment}</td>
+            <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Tabla de análisis mensual
+function populateMonthlyAnalysisTable(ordersData) {
+    const monthlyData = calculateMonthlySales(ordersData);
+
+    const tbody = document.getElementById('monthlyAnalysisBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    monthlyData.forEach(data => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${data.month}</td>
+            <td>${data.orders}</td>
+            <td>${formatCurrency(data.revenue)}</td>
+            <td>${data.customers}</td>
+            <td>${formatCurrency(data.avgOrderValue)}</td>
+            <td>${data.kilos.toLocaleString()} kg</td>
+            <td>${data.avgFulfillmentDays.toFixed(1)} días</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Tabla de análisis de clientes
+function populateCustomersAnalysisTable(ordersData) {
+    const customers = aggregateCustomerData(ordersData)
+        .sort((a, b) => b.totalSpent - a.totalSpent);
+
+    const tbody = document.getElementById('customersAnalysisBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
 
     customers.forEach(customer => {
-        const segment = customer.customer_segment || 'Sin clasificar';
-        segments[segment] = (segments[segment] || 0) + 1;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${customer.email}</td>
+            <td>${customer.totalOrders}</td>
+            <td>${formatCurrency(customer.totalSpent)}</td>
+            <td>${customer.totalKilos.toFixed(1)} kg</td>
+            <td>${customer.totalBags}</td>
+            <td>${formatCurrency(customer.avgPricePerKilo)}</td>
+            <td>${customer.totalBags > 0 ? formatCurrency(customer.totalSpent / customer.totalBags) : '$0'}</td>
+            <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
+            <td>${customer.daysSinceLastOrder || 'N/A'}</td>
+            <td>${customer.primaryState}</td>
+            <td>${customer.segment}</td>
+        `;
+        tbody.appendChild(row);
     });
-
-    return {
-        labels: Object.keys(segments),
-        values: Object.values(segments)
-    };
 }
 
-// Procesar datos geográficos
-function processGeographicData(orders) {
-    const regions = {};
+// Tabla de análisis de órdenes
+function populateOrdersAnalysisTable(ordersData) {
+    const tbody = document.getElementById('ordersAnalysisBody');
+    if (!tbody) return;
 
-    orders.forEach(order => {
-        const region = order.shipping_province || order.shipping_country || 'Sin especificar';
-        regions[region] = (regions[region] || 0) + 1;
+    tbody.innerHTML = '';
+
+    ordersData.slice(0, 100).forEach(order => { // Limitar a 100 órdenes para performance
+        const createdDate = new Date(order.created_at);
+        const processedDate = new Date(order.processed_at || order.fulfillment_created_at);
+        const fulfillmentDays = calculateFulfillmentDays(order.created_at, order.processed_at || order.fulfillment_created_at);
+        const total = parseFloat(order.total_price || 0);
+        const discount = parseFloat(order.total_discounts || 0);
+        const discountPercent = total > 0 ? ((discount / total) * 100).toFixed(1) : '0';
+        const kilos = parseFloat(order.total_kilos || 0);
+        const bags = parseFloat(order.total_bags || 0);
+        const pricePerKilo = kilos > 0 ? total / kilos : 0;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${order.order_number || order.id || 'N/A'}</td>
+            <td>${order.customer_email || 'N/A'}</td>
+            <td>${!isNaN(createdDate.getTime()) ? createdDate.toLocaleDateString('es-MX') : 'N/A'}</td>
+            <td>${!isNaN(processedDate.getTime()) ? processedDate.toLocaleDateString('es-MX') : 'N/A'}</td>
+            <td>${fulfillmentDays !== null ? `${fulfillmentDays} días` : 'N/A'}</td>
+            <td>${formatCurrency(total)}</td>
+            <td>${formatCurrency(discount)}</td>
+            <td>${discountPercent}%</td>
+            <td>${kilos.toFixed(1)} kg</td>
+            <td>${bags}</td>
+            <td>${formatCurrency(pricePerKilo)}</td>
+            <td>${order.shipping_city || 'N/A'}</td>
+            <td>${order.shipping_province || 'N/A'}</td>
+            <td>${order.payment_method || 'N/A'}</td>
+            <td>${order.accepts_marketing === true || order.accepts_marketing === 'true' ? 'Sí' : 'No'}</td>
+        `;
+        tbody.appendChild(row);
     });
-
-    const sortedRegions = Object.entries(regions)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 10);
-
-    return {
-        labels: sortedRegions.map(([region]) => region),
-        values: sortedRegions.map(([, count]) => count)
-    };
 }
 
-// Procesar datos de productos por kilos
-function processProductData(orders) {
-    const products = {};
+// Tabla de análisis detallado
+function populateDetailedAnalysisTable(ordersData) {
+    const tbody = document.getElementById('detailedAnalysisBody');
+    if (!tbody) return;
 
-    orders.forEach(order => {
-        if (order.product_titles) {
-            const productTitles = order.product_titles.split(' | ');
-            productTitles.forEach(title => {
-                if (title.trim()) {
-                    products[title] = (products[title] || 0) + parseFloat(order.total_kilos || 0);
-                }
-            });
-        }
+    tbody.innerHTML = '';
+
+    ordersData.slice(0, 50).forEach(order => { // Limitar a 50 órdenes para performance
+        const processedDate = new Date(order.processed_at || order.fulfillment_created_at);
+        const fulfillmentDays = calculateFulfillmentDays(order.created_at, order.processed_at || order.fulfillment_created_at);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${order.order_number || order.id || 'N/A'}</td>
+            <td>${order.shipping_city || 'N/A'}</td>
+            <td>${order.shipping_province || 'N/A'}</td>
+            <td>${order.payment_method || 'N/A'}</td>
+            <td>${!isNaN(processedDate.getTime()) ? processedDate.toLocaleDateString('es-MX') : 'N/A'}</td>
+            <td>${fulfillmentDays !== null ? `${fulfillmentDays} días` : 'N/A'}</td>
+            <td>${formatCurrency(parseFloat(order.total_price || 0))}</td>
+            <td>${parseFloat(order.total_kilos || 0).toFixed(1)} kg</td>
+        `;
+        tbody.appendChild(row);
     });
-
-    const sortedProducts = Object.entries(products)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 10);
-
-    return {
-        labels: sortedProducts.map(([product]) => product.length > 20 ? product.substring(0, 20) + '...' : product),
-        values: sortedProducts.map(([, kilos]) => kilos)
-    };
 }
 
-// Procesar datos de métodos de pago
-function processPaymentMethodsData(orders) {
-    const methods = {};
+// ===========================================
+// INICIALIZACIÓN
+// ===========================================
 
-    orders.forEach(order => {
-        const method = order.payment_method || 'Desconocido';
-        methods[method] = (methods[method] || 0) + 1;
-    });
+// Event listener único para DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('[INIT] DOM cargado, configurando dashboard K-mita');
 
-    return {
-        labels: Object.keys(methods),
-        values: Object.values(methods)
-    };
-}
-
-// Procesar datos de fulfillment
-function processFulfillmentData(orders) {
-    const fulfillmentStats = {};
-
-    orders.forEach(order => {
-        if (order.fulfillment_days && order.fulfillment_days > 0) {
-            const days = parseInt(order.fulfillment_days);
-            let range;
-
-            if (days <= 1) range = '0-1 días';
-            else if (days <= 3) range = '2-3 días';
-            else if (days <= 7) range = '4-7 días';
-            else if (days <= 14) range = '8-14 días';
-            else range = '15+ días';
-
-            fulfillmentStats[range] = (fulfillmentStats[range] || 0) + 1;
-        }
-    });
-
-    // Crear arrays de labels y values manualmente para compatibilidad
-    const labels = [];
-    const values = [];
-    for (const key in fulfillmentStats) {
-        if (fulfillmentStats.hasOwnProperty(key)) {
-            labels.push(key);
-            values.push(fulfillmentStats[key]);
-        }
-    }
-
-    return {
-        labels: labels,
-        values: values
-    };
-}
-
-// Procesar datos de marketing
-function processMarketingData(orders) {
-    let emailSubscribed = 0;
-    let smsSubscribed = 0;
-    let noMarketing = 0;
-
-    orders.forEach(order => {
-        if (order.email_marketing_state === 'subscribed') emailSubscribed++;
-        else if (order.sms_marketing_state === 'subscribed') smsSubscribed++;
-        else noMarketing++;
-    });
-
-    return {
-        values: [emailSubscribed, smsSubscribed, noMarketing]
-    };
-}
-
-
-// Poblar tabla de análisis mensual
-function populateMonthlyAnalysisTable() {
-    const tbody = document.getElementById('monthlyAnalysisBody');
-
-    const sortedAnalysis = monthlyAnalysisData
-        .sort((a, b) => b.month.localeCompare(a.month))
-        .slice(0, 12);
-
-    tbody.innerHTML = sortedAnalysis.map(month => `
-        <tr>
-            <td>${month.month}</td>
-            <td>${month.total_orders || 0}</td>
-            <td>$${parseFloat(month.total_revenue || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            <td>${month.unique_customer_count || 0}</td>
-            <td>$${parseFloat(month.avg_order_value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            <td>${parseFloat(month.total_kilos || 0).toLocaleString('es-MX', { minimumFractionDigits: 1 })} kg</td>
-            <td>${parseFloat(month.avg_fulfillment_days || 0).toFixed(1)} días</td>
-        </tr>
-    `).join('');
-}
-
-// Obtener clase CSS para badge de segmento
-function getSegmentBadgeClass(segment) {
-    const segmentClasses = {
-        'VIP': 'badge-vip',
-        'Loyal': 'badge-loyal',
-        'High-Value': 'badge-high-value',
-        'Repeat': 'badge-repeat',
-        'At-Risk': 'badge-at-risk',
-        'New': 'badge-new'
-    };
-    return segmentClasses[segment] || 'badge-default';
-}
-
-// Generar insights automáticos
-function generateInsights() {
-    const insights = [];
-
-    if (ordersData.length === 0) {
-        insights.push('No hay datos de órdenes disponibles para generar insights.');
-        return;
-    }
-
-    // Análisis de ingresos
-    const totalRevenue = ordersData.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
-    if (totalRevenue > 100000) {
-        insights.push('💰 Excelente rendimiento: Los ingresos superan los $100,000');
-    }
-
-    // Análisis de clientes VIP
-    const vipCustomers = customersData.filter(c => c.customer_segment === 'VIP').length;
-    if (vipCustomers > 0) {
-        insights.push(`👑 Tienes ${vipCustomers} clientes VIP que generan alto valor`);
-    }
-
-    // Análisis de clientes en riesgo
-    const atRiskCustomers = customersData.filter(c => c.customer_segment === 'At-Risk').length;
-    if (atRiskCustomers > 0) {
-        insights.push(`⚠️ ${atRiskCustomers} clientes en riesgo necesitan atención`);
-    }
-
-    // Análisis de productos
-    const avgOrderValue = totalRevenue / ordersData.length;
-    if (avgOrderValue > 500) {
-        insights.push('📈 Alto valor promedio de orden: $' + avgOrderValue.toFixed(2));
-    }
-
-    // Mostrar insights
-    const insightsContainer = document.getElementById('insightsContainer');
-    if (insightsContainer) {
-        insightsContainer.innerHTML = insights.map(insight =>
-            `<div class="insight-item">${insight}</div>`
-        ).join('');
-    }
-}
-
-
-// Función para manejar el login
-function handleLogin(event) {
-    event.preventDefault();
-
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const errorElement = document.getElementById('loginError');
-
-    // Validar credenciales
-    if (validCredentials[username] && validCredentials[username] === password) {
-        // Login exitoso
+    // Verificar autenticación persistida
+    if (sessionStorage.getItem('kmita_authenticated') === 'true') {
         isAuthenticated = true;
-
-        // Ocultar pantalla de login
         document.getElementById('loginScreen').style.display = 'none';
-
-        // Mostrar dashboard
         document.getElementById('dashboardContainer').style.display = 'block';
-
-        // Cargar datos después del login
-        setTimeout(() => {
-            testGoogleSheetsConnection();
-        }, 100);
-
-        console.log('Login exitoso para usuario:', username);
-
+        testGoogleSheetsConnection();
     } else {
-        // Login fallido
-        errorElement.textContent = '❌ Usuario o contraseña incorrectos';
-        errorElement.style.display = 'block';
-
-        // Limpiar campos
-        document.getElementById('password').value = '';
-
-        console.log('Login fallido para usuario:', username);
+        // Mostrar login por defecto
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('dashboardContainer').style.display = 'none';
     }
-}
 
-// Función para cerrar sesión
-function handleLogout() {
-    isAuthenticated = false;
-
-    // Mostrar pantalla de login
-    document.getElementById('loginScreen').style.display = 'flex';
-
-    // Ocultar dashboard
-    document.getElementById('dashboardContainer').style.display = 'none';
-
-    // Limpiar formulario
-    document.getElementById('loginForm').reset();
-    document.getElementById('loginError').style.display = 'none';
-
-    console.log('Sesión cerrada');
-}
-
-// Event listeners
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('Iniciando K-mita Analytics Dashboard con autenticación...');
-
-    // Configurar event listeners para login
+    // Configurar event listeners
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
 
-    // Configurar event listener para logout
-    const logoutButton = document.getElementById('logoutBtn');
-    if (logoutButton) {
-        logoutButton.addEventListener('click', handleLogout);
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
     }
 
-    // Mostrar pantalla de login por defecto
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('dashboardContainer').style.display = 'none';
-
-    // Configurar otros event listeners (solo si está autenticado)
-    const refreshButton = document.getElementById('refreshData');
-    if (refreshButton) {
-        refreshButton.addEventListener('click', () => {
+    const refreshBtn = document.getElementById('refreshData');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
             if (isAuthenticated) loadShopifyData();
         });
     }
 
-    // Botón para refrescar datos
-    const refreshDataButton = document.getElementById('toggleDemo');
-    if (refreshDataButton) {
-        refreshDataButton.textContent = '🔄 Refrescar Datos';
-        refreshDataButton.addEventListener('click', function () {
-            if (isAuthenticated) loadShopifyData();
-        });
-    }
+    // Configurar filtros de período
+    setupPeriodFilters();
 
-    // Event listener para filtros de período
-    document.querySelectorAll('.filter-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            if (!isAuthenticated) return;
+    console.log('[INIT] Event listeners configurados');
+});
 
+// ===========================================
+// FUNCIONES DE FILTROS DE PERÍODO
+// ===========================================
+
+// Configurar filtros de período
+function setupPeriodFilters() {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
             // Remover clase activa de todos los botones
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            filterButtons.forEach(btn => btn.classList.remove('active'));
 
             // Agregar clase activa al botón clickeado
             this.classList.add('active');
 
             // Actualizar período actual
-            currentPeriod = this.dataset.period;
+            currentPeriod = this.getAttribute('data-period');
 
-            // Recargar datos con nuevo filtro
-            processAndDisplayData();
+            console.log(`[FILTER] Período cambiado a: ${currentPeriod}`);
+
+            // Actualizar dashboard con el nuevo filtro
+            if (isDataLoaded) {
+                processAndDisplayData();
+            }
         });
     });
-});
 
-// Poblar tablas específicas de K-mita
-function populateKmitaTables() {
-    populateTopKmitaCustomersTable();
-    populateKmitaMonthlyAnalysisTable();
-    populateCustomersAnalysisTable();
-    populateOrdersAnalysisTable();
-    generateCustomerAlerts();
+    console.log('[FILTER] Filtros de período configurados');
 }
 
-// Poblar tabla de mejores clientes K-mita
-function populateTopKmitaCustomersTable() {
-    const tbody = document.getElementById('topCustomersBody');
-    if (!tbody) return;
-
-    const topCustomers = customersData
-        .sort((a, b) => parseFloat(b.customer_total_spent || b.total_spent || 0) - parseFloat(a.customer_total_spent || a.total_spent || 0))
-        .slice(0, 10);
-
-    tbody.innerHTML = topCustomers.map(customer => {
-        const totalSpent = parseFloat(customer.customer_total_spent || customer.total_spent || 0);
-        const ordersCount = parseInt(customer.customer_orders_count || customer.orders_count || 0);
-        const avgPerOrder = ordersCount > 0 ? (totalSpent / ordersCount) : 0;
-
-        const customerName = customer.full_name ||
-            `${customer.first_name || ''} ${customer.last_name || ''}`.trim() ||
-            customer.email ||
-            'Cliente K-mita';
-
-        return `
-            <tr>
-                <td>${customerName}</td>
-                <td>${ordersCount}</td>
-                <td>$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                <td>$${avgPerOrder.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                <td><span class="badge ${getSegmentBadgeClass(customer.customer_segment)}">${customer.customer_segment || 'Nuevo'}</span></td>
-                <td>${customer.updated_at ? new Date(customer.updated_at).toLocaleDateString('es-ES') : '-'}</td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// Poblar tabla de análisis mensual K-mita
-function populateKmitaMonthlyAnalysisTable() {
-    const tbody = document.getElementById('monthlyAnalysisBody');
-    if (!tbody) return;
-
-    const monthlyData = processMonthlyData(ordersData);
-    const monthlyRows = [];
-
-    for (let i = 0; i < monthlyData.labels.length; i++) {
-        const avgOrderValue = monthlyData.orders[i] > 0 ? monthlyData.revenue[i] / monthlyData.orders[i] : 0;
-
-        monthlyRows.push({
-            month: monthlyData.labels[i],
-            orders: monthlyData.orders[i],
-            revenue: monthlyData.revenue[i],
-            customers: monthlyData.customers[i],
-            avgOrderValue: avgOrderValue,
-            kilos: monthlyData.kilos[i],
-            bags: monthlyData.bags[i]
-        });
+// Función para filtrar datos por período
+function filterDataByPeriod(data) {
+    if (!data || currentPeriod === 'all') {
+        return data;
     }
 
-    // Ordenar por mes más reciente primero
-    monthlyRows.reverse();
+    const now = new Date();
+    let cutoffDate;
 
-    tbody.innerHTML = monthlyRows.slice(0, 12).map(month => `
-        <tr>
-            <td>${month.month}</td>
-            <td>${month.orders}</td>
-            <td>$${month.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            <td>${month.customers}</td>
-            <td>$${month.avgOrderValue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            <td>${month.kilos.toFixed(1)} kg</td>
-            <td>-</td>
-        </tr>
-    `).join('');
+    switch (currentPeriod) {
+        case '1m':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+        case '3m':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            break;
+        case '6m':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+            break;
+        case '12m':
+            cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        default:
+            return data;
+    }
+
+    return data.filter(item => {
+        const itemDate = new Date(item.created_at);
+        return !isNaN(itemDate.getTime()) && itemDate >= cutoffDate;
+    });
 }
 
-// Tabla de análisis detallado de clientes
-function populateCustomersAnalysisTable() {
-    const tbody = document.getElementById('customersAnalysisBody');
-    if (!tbody) return;
+// ===========================================
+// FUNCIONES DE ALERTAS E INSIGHTS
+// ===========================================
 
-    const topCustomers = customersData
-        .sort((a, b) => parseFloat(b.customer_total_spent || b.total_spent || 0) - parseFloat(a.customer_total_spent || a.total_spent || 0))
-        .slice(0, 10);
-
-    tbody.innerHTML = topCustomers.map(customer => {
-        const totalSpent = parseFloat(customer.customer_total_spent || customer.total_spent || 0);
-        const ordersCount = parseInt(customer.customer_orders_count || customer.orders_count || 0);
-        const avgPerOrder = ordersCount > 0 ? (totalSpent / ordersCount) : 0;
-        const totalKilos = parseFloat(customer.total_kilos || customer.kilos || 0);
-        const totalBags = parseFloat(customer.total_bags || customer.bags || 0);
-        const pricePerKg = totalKilos > 0 ? (totalSpent / totalKilos).toFixed(2) : '0.00';
-        const pricePerBag = totalBags > 0 ? (totalSpent / totalBags).toFixed(2) : '0.00';
-        const lastPurchaseDate = new Date(customer.last_purchase || customer.updated_at || customer.created_at);
-        const daysSinceLastPurchase = isNaN(lastPurchaseDate.getTime()) ? 30 : Math.floor((new Date() - lastPurchaseDate) / (1000 * 60 * 60 * 24));
-        const status = daysSinceLastPurchase > 60 ? 'inactive' : daysSinceLastPurchase > 30 ? 'at-risk' : 'active';
-
-        const customerName = customer.full_name ||
-            `${customer.first_name || ''} ${customer.last_name || ''}`.trim() ||
-            customer.email ||
-            'Cliente K-mita';
-
-        return `
-            <tr>
-                <td>${customerName}</td>
-                <td>${ordersCount}</td>
-                <td>$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                <td>${totalKilos} kg</td>
-                <td>${totalBags}</td>
-                <td>$${pricePerKg}/kg</td>
-                <td>$${pricePerBag}/bolsa</td>
-                <td>${customer.last_purchase || 'Hace 2 días'}</td>
-                <td>${daysSinceLastPurchase} días</td>
-                <td>${customer.shipping_province || customer.customer_state || 'Sin especificar'}</td>
-                <td><span class="status-${status}">${status.toUpperCase()}</span></td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// Tabla de análisis de órdenes
-function populateOrdersAnalysisTable() {
-    const tbody = document.getElementById('ordersAnalysisBody');
-    if (!tbody) return;
-
-    const recentOrders = ordersData.slice(0, 20); // Mostrar últimas 20 órdenes
-
-    tbody.innerHTML = recentOrders.map(order => {
-        const paidDate = new Date(order.created_at || order.order_date);
-        const fulfilledDate = new Date(order.fulfilled_at || order.updated_at);
-        const fulfillmentDays = Math.ceil((fulfilledDate - paidDate) / (1000 * 60 * 60 * 24));
-        const discountPercent = order.total_discounts ? ((parseFloat(order.total_discounts) / parseFloat(order.total_price)) * 100).toFixed(1) : '0.0';
-        const totalKilos = parseFloat(order.total_kilos || order.kilos || order.total_weight || 0);
-        const pricePerKg = totalKilos > 0 ? (parseFloat(order.total_price) / totalKilos).toFixed(2) : '0.00';
-
-        return `
-            <tr>
-                <td>${order.id || order.order_number || 'N/A'}</td>
-                <td>${order.customer_email || 'Cliente anónimo'}</td>
-                <td>${paidDate.toLocaleDateString('es-ES')}</td>
-                <td>${fulfilledDate.toLocaleDateString('es-ES')}</td>
-                <td>${fulfillmentDays} días</td>
-                <td>$${parseFloat(order.total_price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                <td>$${parseFloat(order.total_discounts || 0).toFixed(2)}</td>
-                <td>${discountPercent}%</td>
-                <td>${parseFloat(order.total_kilos || 0).toFixed(1)} kg</td>
-                <td>${parseFloat(order.total_bags || 0)}</td>
-                <td>$${pricePerKg}/kg</td>
-                <td>${order.shipping_city || 'N/A'}</td>
-                <td>${order.shipping_province || order.customer_state || 'N/A'}</td>
-                <td>${order.payment_method || 'N/A'}</td>
-                <td>${order.accepts_marketing === 'TRUE' || order.accepts_marketing === true ? '✅ Sí' : '❌ No'}</td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// Generar alertas de clientes
+// Generar alertas de clientes inactivos
 function generateCustomerAlerts() {
+    const filteredOrders = filterDataByPeriod(ordersData);
+    const customers = aggregateCustomerData(filteredOrders);
+
     const alertsContainer = document.getElementById('customerAlerts');
     if (!alertsContainer) return;
 
-    const inactiveCustomers = customersData.filter(c => {
-        const days = parseInt(c.days_since_last_order || 0);
-        return days > 60;
-    });
+    // Identificar clientes inactivos (sin compras en los últimos 90 días)
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-    const atRiskCustomers = customersData.filter(c => {
-        const days = parseInt(c.days_since_last_order || 0);
-        return days > 30 && days <= 60;
-    });
+    const inactiveCustomers = customers.filter(customer =>
+        customer.lastOrder && customer.lastOrder < ninetyDaysAgo && customer.totalOrders > 0
+    ).sort((a, b) => b.totalSpent - a.totalSpent); // Ordenar por valor gastado
+
+    // Identificar clientes en riesgo (sin compras en los últimos 60 días pero con historial)
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    const atRiskCustomers = customers.filter(customer =>
+        customer.lastOrder && customer.lastOrder < sixtyDaysAgo &&
+        customer.lastOrder >= ninetyDaysAgo && customer.totalOrders >= 2
+    ).sort((a, b) => b.totalSpent - a.totalSpent); // Ordenar por valor gastado
 
     let alertsHTML = '';
 
     if (inactiveCustomers.length > 0) {
+        const totalValueLost = inactiveCustomers.reduce((sum, c) => sum + c.totalSpent, 0);
         alertsHTML += `
             <div class="alert-card critical">
-                <h4>🚨 Clientes Inactivos</h4>
-                <p>${inactiveCustomers.length} clientes no han comprado en más de 60 días. Considera una campaña de reactivación.</p>
+                <div class="alert-icon">⚠️</div>
+                <div class="alert-content">
+                    <h4>Clientes Inactivos (${inactiveCustomers.length})</h4>
+                    <p>Clientes sin compras en los últimos 90 días</p>
+                    <small>Valor potencial perdido: $${totalValueLost.toLocaleString('es-MX')}</small>
+                    <details class="alert-details" data-type="inactive">
+                        <summary>Ver detalles de clientes inactivos</summary>
+                        <div class="alert-table-container">
+                            <div class="alert-table-section" id="inactive-top">
+                                <table class="alert-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Email</th>
+                                            <th>Última Compra</th>
+                                            <th>Total Gastado</th>
+                                            <th>Órdenes</th>
+                                            <th>Días Sin Comprar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${inactiveCustomers.slice(0, 10).map(customer => `
+                                            <tr>
+                                                <td>${customer.email}</td>
+                                                <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
+                                                <td>$${customer.totalSpent.toLocaleString('es-MX')}</td>
+                                                <td>${customer.totalOrders}</td>
+                                                <td>${customer.daysSinceLastOrder || 'N/A'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                ${inactiveCustomers.length > 10 ? `
+                                    <div class="alert-actions">
+                                        <p class="alert-note">Mostrando 10 de ${inactiveCustomers.length} clientes. Los más valiosos primero.</p>
+                                        <button class="show-all-btn" onclick="showAllInactiveCustomers()">Ver todos los clientes inactivos</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="alert-table-section" id="inactive-all" style="display: none;">
+                                <table class="alert-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Email</th>
+                                            <th>Última Compra</th>
+                                            <th>Total Gastado</th>
+                                            <th>Órdenes</th>
+                                            <th>Días Sin Comprar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${inactiveCustomers.map(customer => `
+                                            <tr>
+                                                <td>${customer.email}</td>
+                                                <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
+                                                <td>$${customer.totalSpent.toLocaleString('es-MX')}</td>
+                                                <td>${customer.totalOrders}</td>
+                                                <td>${customer.daysSinceLastOrder || 'N/A'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                <div class="alert-actions">
+                                    <button class="show-top-btn" onclick="showTopInactiveCustomers()">Volver al top 10</button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
             </div>
         `;
     }
 
     if (atRiskCustomers.length > 0) {
+        const totalValueAtRisk = atRiskCustomers.reduce((sum, c) => sum + c.totalSpent, 0);
         alertsHTML += `
             <div class="alert-card warning">
-                <h4>⚠️ Clientes en Riesgo</h4>
-                <p>${atRiskCustomers.length} clientes no han comprado en más de 30 días. Envía recordatorios personalizados.</p>
+                <div class="alert-icon">🚨</div>
+                <div class="alert-content">
+                    <h4>Clientes en Riesgo (${atRiskCustomers.length})</h4>
+                    <p>Clientes sin compras en los últimos 60 días</p>
+                    <small>Valor en riesgo: $${totalValueAtRisk.toLocaleString('es-MX')} - Necesitan atención inmediata</small>
+                    <details class="alert-details" data-type="at-risk">
+                        <summary>Ver detalles de clientes en riesgo</summary>
+                        <div class="alert-table-container">
+                            <div class="alert-table-section" id="atrisk-top">
+                                <table class="alert-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Email</th>
+                                            <th>Última Compra</th>
+                                            <th>Total Gastado</th>
+                                            <th>Órdenes</th>
+                                            <th>Días Sin Comprar</th>
+                                            <th>Segmento</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${atRiskCustomers.slice(0, 10).map(customer => `
+                                            <tr>
+                                                <td>${customer.email}</td>
+                                                <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
+                                                <td>$${customer.totalSpent.toLocaleString('es-MX')}</td>
+                                                <td>${customer.totalOrders}</td>
+                                                <td>${customer.daysSinceLastOrder || 'N/A'}</td>
+                                                <td>${customer.segment}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                ${atRiskCustomers.length > 10 ? `
+                                    <div class="alert-actions">
+                                        <p class="alert-note">Mostrando 10 de ${atRiskCustomers.length} clientes. Los más valiosos primero.</p>
+                                        <button class="show-all-btn" onclick="showAllAtRiskCustomers()">Ver todos los clientes en riesgo</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="alert-table-section" id="atrisk-all" style="display: none;">
+                                <table class="alert-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Email</th>
+                                            <th>Última Compra</th>
+                                            <th>Total Gastado</th>
+                                            <th>Órdenes</th>
+                                            <th>Días Sin Comprar</th>
+                                            <th>Segmento</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${atRiskCustomers.map(customer => `
+                                            <tr>
+                                                <td>${customer.email}</td>
+                                                <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
+                                                <td>$${customer.totalSpent.toLocaleString('es-MX')}</td>
+                                                <td>${customer.totalOrders}</td>
+                                                <td>${customer.daysSinceLastOrder || 'N/A'}</td>
+                                                <td>${customer.segment}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                <div class="alert-actions">
+                                    <button class="show-top-btn" onclick="showTopAtRiskCustomers()">Volver al top 10</button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
             </div>
         `;
     }
 
     if (alertsHTML === '') {
         alertsHTML = `
-            <div class="alert-card info">
-                <h4>✅ Sin Alertas</h4>
-                <p>Todos los clientes están activos en el período seleccionado.</p>
+            <div class="alert-card success">
+                <div class="alert-icon">✅</div>
+                <div class="alert-content">
+                    <h4>Todo en Orden</h4>
+                    <p>No hay clientes inactivos o en riesgo en este período</p>
+                    <small>Mantén el buen trabajo con tus clientes</small>
+                </div>
             </div>
         `;
     }
@@ -1636,832 +1598,145 @@ function generateCustomerAlerts() {
     alertsContainer.innerHTML = alertsHTML;
 }
 
-
-// Obtener estados con más ventas K-mita
-function getTopStatesKmita() {
-    const statesSales = {};
-
-    ordersData.forEach(order => {
-        const state = order.shipping_province || order.customer_state || 'Sin especificar';
-        const revenue = parseFloat(order.total_price || 0);
-        statesSales[state] = (statesSales[state] || 0) + revenue;
-    });
-
-    return Object.entries(statesSales)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([state, revenue]) => ({ state, revenue }));
+// Funciones para mostrar/ocultar todas las listas de clientes
+function showAllInactiveCustomers() {
+    document.getElementById('inactive-top').style.display = 'none';
+    document.getElementById('inactive-all').style.display = 'block';
 }
 
-// Función para obtener clase CSS del badge de segmento
-function getSegmentBadgeClass(segment) {
-    const segmentClasses = {
-        'VIP': 'badge-vip',
-        'Loyal': 'badge-loyal',
-        'High-Value': 'badge-high-value',
-        'Repeat': 'badge-repeat',
-        'At-Risk': 'badge-at-risk',
-        'New': 'badge-new',
-        'One-time': 'badge-onetime'
-    };
-    return segmentClasses[segment] || 'badge-default';
+function showTopInactiveCustomers() {
+    document.getElementById('inactive-all').style.display = 'none';
+    document.getElementById('inactive-top').style.display = 'block';
 }
 
-// Inicializar dashboard K-mita cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('Iniciando K-mita Analytics Dashboard...');
-
-    // Configurar event listeners
-    const refreshButton = document.getElementById('refreshData');
-    if (refreshButton) {
-        refreshButton.addEventListener('click', loadShopifyData);
-    }
-
-    const toggleDemoButton = document.getElementById('toggleDemo');
-    if (toggleDemoButton) {
-        toggleDemoButton.addEventListener('click', function () {
-            this.textContent = isDataLoaded ? '📊 Usar Datos Demo' : '📊 Usar Datos Reales';
-            if (isDataLoaded) {
-                // Cambiar a datos demo
-                console.log('Cambiando a datos demo...');
-            } else {
-                // Cargar datos reales
-                loadShopifyData();
-            }
-        });
-    }
-
-    // Configurar filtros de período
-    setupPeriodFilters();
-
-    // Probar conexión inicial
-    testGoogleSheetsConnection();
-});
-
-// Configurar filtros de período
-function setupPeriodFilters() {
-    const filterButtons = document.querySelectorAll('.filter-btn');
-
-    filterButtons.forEach(button => {
-        button.addEventListener('click', function () {
-            // Remover clase active de todos los botones
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-
-            // Agregar clase active al botón clickeado
-            this.classList.add('active');
-
-            // Obtener el período seleccionado
-            currentPeriod = this.getAttribute('data-period');
-
-            console.log('Período K-mita seleccionado:', currentPeriod);
-
-            // Actualizar dashboard con el nuevo período
-            if (isDataLoaded) {
-                processAndDisplayData();
-            }
-        });
-    });
+function showAllAtRiskCustomers() {
+    document.getElementById('atrisk-top').style.display = 'none';
+    document.getElementById('atrisk-all').style.display = 'block';
 }
 
-console.log('K-mita Analytics Dashboard script cargado correctamente');
-
-// Función para manejar errores de carga de datos
-function handleDataLoadError(error, context = '') {
-    console.error(`Error en ${context}:`, error);
-
-    const errorMessages = {
-        403: 'API Key sin permisos o documento privado',
-        404: 'Documento o hoja no encontrada',
-        429: 'Límite de API excedido, intenta más tarde',
-        500: 'Error interno del servidor de Google'
-    };
-
-    const statusCode = error.status || error.code;
-    const message = errorMessages[statusCode] || error.message || 'Error desconocido';
-
-    updateDataSourceStatus(`❌ Error K-mita: ${message}`);
-
-    if (statusCode === 403 || statusCode === 404) {
-        showConnectionHelp();
-    }
+function showTopAtRiskCustomers() {
+    document.getElementById('atrisk-all').style.display = 'none';
+    document.getElementById('atrisk-top').style.display = 'block';
 }
 
-// Auto-refresh de datos cada 5 minutos si está habilitado
-if (CONFIG.DATA.AUTO_REFRESH_ENABLED) {
-    setInterval(() => {
-        if (isDataLoaded && document.visibilityState === 'visible') {
-            console.log('Auto-refresh de datos K-mita...');
-            loadShopifyData();
-        }
-    }, CONFIG.DATA.REFRESH_INTERVAL);
-}
+// Generar insights del negocio
+function generateBusinessInsights() {
+    const filteredOrders = filterDataByPeriod(ordersData);
+    const customers = aggregateCustomerData(filteredOrders);
 
-// ===== FUNCIONES DE TABLAS CON FILTROS Y BÚSQUEDAS =====
-
-// Poblar tablas con datos reales de K-mita
-        function populateKmitaTables() {
-            populateTopCustomersTable();
-            populateMonthlyAnalysisTable();
-            populateCustomersAnalysisTable();
-            populateOrdersAnalysisTable();
-
-            // Agregar funcionalidad de filtros y búsquedas
-            addTableFilters();
-        }
-
-// Tabla de análisis detallado de clientes con filtros
-function populateCustomersAnalysisTable() {
-    const tbody = document.getElementById('customersAnalysisBody');
-    if (!tbody) return;
-
-    const filteredOrders = filterOrdersByPeriod(ordersData);
-    const customerAnalysis = calculateCustomerAnalysis(filteredOrders);
-
-    tbody.innerHTML = '';
-
-    customerAnalysis.forEach(customer => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td data-label="Cliente">${customer.email}</td>
-            <td data-label="Órdenes">${customer.totalOrders}</td>
-            <td data-label="Total Gastado">$${customer.totalSpent.toFixed(2)}</td>
-            <td data-label="Kilos Comprados">${customer.totalKilos.toFixed(1)} kg</td>
-            <td data-label="Bolsas Compradas">${customer.totalBags}</td>
-            <td data-label="Precio/Kg">$${customer.avgPricePerKg.toFixed(2)}/kg</td>
-            <td data-label="Precio/Bolsa">$${customer.avgPricePerBag.toFixed(2)}/bolsa</td>
-            <td data-label="Última Compra">${customer.lastOrderDate}</td>
-            <td data-label="Días Sin Comprar">${customer.daysSinceLastOrder} días</td>
-            <td data-label="Estado">${customer.state}</td>
-            <td data-label="Status">
-                <span class="status-badge ${customer.status.toLowerCase()}">${customer.status}</span>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-// Tabla de análisis de órdenes con filtros
-function populateOrdersAnalysisTable() {
-    const tbody = document.getElementById('ordersAnalysisBody');
-    if (!tbody) return;
-
-    const filteredOrders = filterOrdersByPeriod(ordersData);
-    const ordersAnalysis = calculateOrdersAnalysis(filteredOrders);
-
-    tbody.innerHTML = '';
-
-    ordersAnalysis.forEach(order => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td data-label="Orden #">${order.orderNumber}</td>
-            <td data-label="Cliente">${order.customerEmail}</td>
-            <td data-label="Fecha Pago">${order.orderDate}</td>
-            <td data-label="Fecha Fulfillment">${order.fulfilledDate}</td>
-            <td data-label="Días Fulfillment">${order.fulfillmentDays} días</td>
-            <td data-label="Importe">$${order.totalPrice.toFixed(2)}</td>
-            <td data-label="Descuento">$${order.discount.toFixed(2)}</td>
-            <td data-label="% Descuento">${order.discountPercent.toFixed(1)}%</td>
-            <td data-label="Kilos">${order.kilos.toFixed(1)} kg</td>
-            <td data-label="Bolsas">${order.bags}</td>
-            <td data-label="Precio/Kg">$${order.pricePerKg.toFixed(2)}/kg</td>
-            <td data-label="Ciudad">${order.city}</td>
-            <td data-label="Estado">${order.state}</td>
-            <td data-label="Método Pago">${order.paymentMethod}</td>
-            <td data-label="Acepta MKT">
-                <span class="status-badge ${order.acceptsMarketing ? 'active' : 'inactive'}">
-                    ${order.acceptsMarketing ? 'Sí' : 'No'}
-                </span>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-// Calcular análisis detallado de clientes
-function calculateCustomerAnalysis(orders) {
-    const customerMap = new Map();
-
-    orders.forEach(order => {
-        const email = order.customer_email || order.email;
-        if (!email) return;
-
-        if (!customerMap.has(email)) {
-            customerMap.set(email, {
-                email: email,
-                totalOrders: 0,
-                totalSpent: 0,
-                totalKilos: 0,
-                totalBags: 0,
-                orders: [],
-                state: order.shipping_address_province || order.state || 'N/A'
-            });
-        }
-
-        const customer = customerMap.get(email);
-        customer.totalOrders++;
-        customer.totalSpent += parseFloat(order.total_price || order.current_total_price || 0);
-        customer.totalKilos += parseFloat(order.total_kilos || order.kilos || 0);
-        customer.totalBags += parseFloat(order.total_bags || order.bags || 1);
-        customer.orders.push(order);
-    });
-
-    const customerAnalysis = Array.from(customerMap.values()).map(customer => {
-        const sortedOrders = customer.orders.sort((a, b) =>
-            new Date(b.created_at || b.order_date) - new Date(a.created_at || a.order_date)
-        );
-
-        const lastOrder = sortedOrders[0];
-        const lastOrderDate = new Date(lastOrder.created_at || lastOrder.order_date);
-        const daysSinceLastOrder = Math.floor((new Date() - lastOrderDate) / (1000 * 60 * 60 * 24));
-
-        let status = 'ACTIVE';
-        if (daysSinceLastOrder > 90) status = 'INACTIVE';
-        else if (daysSinceLastOrder > 30) status = 'AT_RISK';
-
-        return {
-            ...customer,
-            avgPricePerKg: customer.totalKilos > 0 ? customer.totalSpent / customer.totalKilos : 0,
-            avgPricePerBag: customer.totalBags > 0 ? customer.totalSpent / customer.totalBags : 0,
-            lastOrderDate: lastOrderDate.toLocaleDateString('es-MX'),
-            daysSinceLastOrder: daysSinceLastOrder,
-            status: status
-        };
-    });
-
-    return customerAnalysis.sort((a, b) => b.totalSpent - a.totalSpent);
-}
-
-// Calcular análisis detallado de órdenes
-function calculateOrdersAnalysis(orders) {
-    return orders.map(order => {
-        const orderDate = new Date(order.created_at || order.order_date);
-        const fulfilledDate = new Date(order.fulfilled_at || order.updated_at);
-        const fulfillmentDays = Math.ceil((fulfilledDate - orderDate) / (1000 * 60 * 60 * 24));
-
-        const totalPrice = parseFloat(order.total_price || order.current_total_price || 0);
-        const discount = parseFloat(order.total_discounts || order.discount || 0);
-        const kilos = parseFloat(order.total_kilos || order.kilos || 0);
-        const bags = parseFloat(order.total_bags || order.bags || 1);
-
-        return {
-            orderNumber: order.order_number || order.id || 'N/A',
-            customerEmail: order.customer_email || order.email || 'N/A',
-            orderDate: orderDate.toLocaleDateString('es-MX'),
-            fulfilledDate: isNaN(fulfilledDate.getTime()) ? 'N/A' : fulfilledDate.toLocaleDateString('es-MX'),
-            fulfillmentDays: isNaN(fulfillmentDays) ? 0 : Math.max(0, fulfillmentDays),
-            totalPrice: totalPrice,
-            discount: discount,
-            discountPercent: totalPrice > 0 ? (discount / totalPrice) * 100 : 0,
-            kilos: kilos,
-            bags: bags,
-            pricePerKg: kilos > 0 ? totalPrice / kilos : 0,
-            city: order.shipping_address_city || order.city || 'N/A',
-            state: order.shipping_address_province || order.state || 'N/A',
-            paymentMethod: order.payment_gateway_names || order.payment_method || 'N/A',
-            acceptsMarketing: order.accepts_marketing === 'true' || order.accepts_marketing === true
-        };
-    }).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
-}
-
-// Agregar filtros y búsquedas a las tablas
-function addTableFilters() {
-    addCustomersTableFilters();
-    addOrdersTableFilters();
-}
-
-// Filtros para tabla de clientes
-function addCustomersTableFilters() {
-    const table = document.getElementById('customersAnalysisTable');
-    if (!table) return;
-
-    // Crear contenedor de filtros
-    const filtersContainer = document.createElement('div');
-    filtersContainer.className = 'table-filters';
-    filtersContainer.innerHTML = `
-        <div class="filter-row">
-            <div class="filter-group">
-                <label>🔍 Buscar Cliente:</label>
-                <input type="text" id="customerSearch" placeholder="Buscar por email...">
-            </div>
-            <div class="filter-group">
-                <label>📍 Estado:</label>
-                <select id="customerStateFilter">
-                    <option value="">Todos los Estados</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>📊 Status:</label>
-                <select id="customerStatusFilter">
-                    <option value="">Todos</option>
-                    <option value="ACTIVE">Activos</option>
-                    <option value="AT_RISK">En Riesgo</option>
-                    <option value="INACTIVE">Inactivos</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>💰 Gasto Mínimo:</label>
-                <input type="number" id="customerMinSpent" placeholder="$0" min="0">
-            </div>
-            <button id="clearCustomerFilters" class="clear-filters-btn">🗑️ Limpiar Filtros</button>
-        </div>
-    `;
-
-    table.parentNode.insertBefore(filtersContainer, table);
-
-    // Poblar filtro de estados
-    populateStateFilter('customerStateFilter');
-
-    // Agregar event listeners
-    document.getElementById('customerSearch').addEventListener('input', filterCustomersTable);
-    document.getElementById('customerStateFilter').addEventListener('change', filterCustomersTable);
-    document.getElementById('customerStatusFilter').addEventListener('change', filterCustomersTable);
-    document.getElementById('customerMinSpent').addEventListener('input', filterCustomersTable);
-    document.getElementById('clearCustomerFilters').addEventListener('click', clearCustomerFilters);
-}
-
-// Filtros para tabla de órdenes
-function addOrdersTableFilters() {
-    const table = document.getElementById('ordersAnalysisTable');
-    if (!table) return;
-
-    // Crear contenedor de filtros
-    const filtersContainer = document.createElement('div');
-    filtersContainer.className = 'table-filters';
-    filtersContainer.innerHTML = `
-        <div class="filter-row">
-            <div class="filter-group">
-                <label>🔍 Buscar:</label>
-                <input type="text" id="orderSearch" placeholder="Buscar por cliente, orden...">
-            </div>
-            <div class="filter-group">
-                <label>📅 Fecha Desde:</label>
-                <input type="date" id="orderDateFrom">
-            </div>
-            <div class="filter-group">
-                <label>📅 Fecha Hasta:</label>
-                <input type="date" id="orderDateTo">
-            </div>
-            <div class="filter-group">
-                <label>📍 Estado:</label>
-                <select id="orderStateFilter">
-                    <option value="">Todos los Estados</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>💳 Método Pago:</label>
-                <select id="orderPaymentFilter">
-                    <option value="">Todos</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>💰 Monto Mínimo:</label>
-                <input type="number" id="orderMinAmount" placeholder="$0" min="0">
-            </div>
-            <button id="clearOrderFilters" class="clear-filters-btn">🗑️ Limpiar Filtros</button>
-        </div>
-    `;
-
-    table.parentNode.insertBefore(filtersContainer, table);
-
-    // Poblar filtros
-    populateStateFilter('orderStateFilter');
-    populatePaymentMethodFilter();
-
-    // Agregar event listeners
-    document.getElementById('orderSearch').addEventListener('input', filterOrdersTable);
-    document.getElementById('orderDateFrom').addEventListener('change', filterOrdersTable);
-    document.getElementById('orderDateTo').addEventListener('change', filterOrdersTable);
-    document.getElementById('orderStateFilter').addEventListener('change', filterOrdersTable);
-    document.getElementById('orderPaymentFilter').addEventListener('change', filterOrdersTable);
-    document.getElementById('orderMinAmount').addEventListener('input', filterOrdersTable);
-    document.getElementById('clearOrderFilters').addEventListener('click', clearOrderFilters);
-}
-
-// Poblar filtro de estados
-function populateStateFilter(selectId) {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-
-    const states = [...new Set(ordersData.map(order =>
-        order.shipping_address_province || order.state || 'N/A'
-    ))].filter(state => state && state !== 'N/A').sort();
-
-    states.forEach(state => {
-        const option = document.createElement('option');
-        option.value = state;
-        option.textContent = state;
-        select.appendChild(option);
-    });
-}
-
-// Poblar filtro de métodos de pago
-function populatePaymentMethodFilter() {
-    const select = document.getElementById('orderPaymentFilter');
-    if (!select) return;
-
-    const paymentMethods = [...new Set(ordersData.map(order =>
-        order.payment_gateway_names || order.payment_method || 'N/A'
-    ))].filter(method => method && method !== 'N/A').sort();
-
-    paymentMethods.forEach(method => {
-        const option = document.createElement('option');
-        option.value = method;
-        option.textContent = method;
-        select.appendChild(option);
-    });
-}
-
-// Filtrar tabla de clientes
-function filterCustomersTable() {
-    const searchTerm = document.getElementById('customerSearch').value.toLowerCase();
-    const stateFilter = document.getElementById('customerStateFilter').value;
-    const statusFilter = document.getElementById('customerStatusFilter').value;
-    const minSpent = parseFloat(document.getElementById('customerMinSpent').value) || 0;
-
-    const tbody = document.getElementById('customersAnalysisBody');
-    const rows = tbody.getElementsByTagName('tr');
-
-    Array.from(rows).forEach(row => {
-        const email = row.cells[0].textContent.toLowerCase();
-        const totalSpent = parseFloat(row.cells[2].textContent.replace('$', '').replace(',', ''));
-        const state = row.cells[9].textContent;
-        const status = row.cells[10].textContent.trim();
-
-        const matchesSearch = email.includes(searchTerm);
-        const matchesState = !stateFilter || state === stateFilter;
-        const matchesStatus = !statusFilter || status === statusFilter;
-        const matchesSpent = totalSpent >= minSpent;
-
-        row.style.display = matchesSearch && matchesState && matchesStatus && matchesSpent ? '' : 'none';
-    });
-
-    updateTableStats('customersAnalysisTable');
-}
-
-// Filtrar tabla de órdenes
-function filterOrdersTable() {
-    const searchTerm = document.getElementById('orderSearch').value.toLowerCase();
-    const dateFrom = document.getElementById('orderDateFrom').value;
-    const dateTo = document.getElementById('orderDateTo').value;
-    const stateFilter = document.getElementById('orderStateFilter').value;
-    const paymentFilter = document.getElementById('orderPaymentFilter').value;
-    const minAmount = parseFloat(document.getElementById('orderMinAmount').value) || 0;
-
-    const tbody = document.getElementById('ordersAnalysisBody');
-    const rows = tbody.getElementsByTagName('tr');
-
-    Array.from(rows).forEach(row => {
-        const orderNumber = row.cells[0].textContent.toLowerCase();
-        const customer = row.cells[1].textContent.toLowerCase();
-        const orderDate = new Date(row.cells[2].textContent.split('/').reverse().join('-'));
-        const amount = parseFloat(row.cells[5].textContent.replace('$', '').replace(',', ''));
-        const state = row.cells[12].textContent;
-        const paymentMethod = row.cells[13].textContent;
-
-        const matchesSearch = orderNumber.includes(searchTerm) || customer.includes(searchTerm);
-        const matchesDateFrom = !dateFrom || orderDate >= new Date(dateFrom);
-        const matchesDateTo = !dateTo || orderDate <= new Date(dateTo);
-        const matchesState = !stateFilter || state === stateFilter;
-        const matchesPayment = !paymentFilter || paymentMethod === paymentFilter;
-        const matchesAmount = amount >= minAmount;
-
-        row.style.display = matchesSearch && matchesDateFrom && matchesDateTo &&
-            matchesState && matchesPayment && matchesAmount ? '' : 'none';
-    });
-
-    updateTableStats('ordersAnalysisTable');
-}
-
-// Limpiar filtros de clientes
-function clearCustomerFilters() {
-    document.getElementById('customerSearch').value = '';
-    document.getElementById('customerStateFilter').value = '';
-    document.getElementById('customerStatusFilter').value = '';
-    document.getElementById('customerMinSpent').value = '';
-    filterCustomersTable();
-}
-
-// Limpiar filtros de órdenes
-function clearOrderFilters() {
-    document.getElementById('orderSearch').value = '';
-    document.getElementById('orderDateFrom').value = '';
-    document.getElementById('orderDateTo').value = '';
-    document.getElementById('orderStateFilter').value = '';
-    document.getElementById('orderPaymentFilter').value = '';
-    document.getElementById('orderMinAmount').value = '';
-    filterOrdersTable();
-}
-
-// Actualizar estadísticas de tabla
-function updateTableStats(tableId) {
-    const table = document.getElementById(tableId);
-    if (!table) return;
-
-    const tbody = table.getElementsByTagName('tbody')[0];
-    const allRows = tbody.getElementsByTagName('tr');
-    const visibleRows = Array.from(allRows).filter(row => row.style.display !== 'none');
-
-    // Crear o actualizar contador de resultados
-    let statsElement = table.parentNode.querySelector('.table-stats');
-    if (!statsElement) {
-        statsElement = document.createElement('div');
-        statsElement.className = 'table-stats';
-        table.parentNode.insertBefore(statsElement, table.nextSibling);
-    }
-
-    statsElement.innerHTML = `
-        <span>📊 Mostrando ${visibleRows.length} de ${allRows.length} registros</span>
-    `;
-}
-
-// Agregar funcionalidad de exportación
-function addExportButtons() {
-    // Botón para exportar clientes
-    const customersSection = document.querySelector('#customersAnalysisTable').parentNode;
-    const customersExportBtn = document.createElement('button');
-    customersExportBtn.className = 'export-btn';
-    customersExportBtn.innerHTML = '📥 Exportar Clientes';
-    customersExportBtn.onclick = () => exportTableToCSV('customersAnalysisTable', 'clientes-analisis.csv');
-    customersSection.insertBefore(customersExportBtn, customersSection.firstChild.nextSibling);
-
-    // Botón para exportar órdenes
-    const ordersSection = document.querySelector('#ordersAnalysisTable').parentNode;
-    const ordersExportBtn = document.createElement('button');
-    ordersExportBtn.className = 'export-btn';
-    ordersExportBtn.innerHTML = '📥 Exportar Órdenes';
-    ordersExportBtn.onclick = () => exportTableToCSV('ordersAnalysisTable', 'ordenes-analisis.csv');
-    ordersSection.insertBefore(ordersExportBtn, ordersSection.firstChild.nextSibling);
-}
-
-// Exportar tabla a CSV
-function exportTableToCSV(tableId, filename) {
-    const table = document.getElementById(tableId);
-    if (!table) return;
-
-    const rows = table.querySelectorAll('tr');
-    const csvContent = Array.from(rows).map(row => {
-        const cells = row.querySelectorAll('th, td');
-        return Array.from(cells).map(cell => {
-            let text = cell.textContent.trim();
-            // Limpiar badges y elementos HTML
-            text = text.replace(/\s+/g, ' ');
-            // Escapar comillas
-            if (text.includes(',') || text.includes('"')) {
-                text = '"' + text.replace(/"/g, '""') + '"';
-            }
-            return text;
-        }).join(',');
-    }).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// Inicializar funcionalidades adicionales después de cargar datos
-function initializeEnhancedFeatures() {
-    // Agregar botones de exportación
-    setTimeout(() => {
-        addExportButtons();
-    }, 1000);
-
-    // Agregar tooltips informativos
-    addTooltips();
-
-    // Configurar auto-refresh cada 5 minutos
-    setInterval(() => {
-        if (isDataLoaded) {
-            console.log('Auto-refresh de datos...');
-            loadShopifyData();
-        }
-    }, 5 * 60 * 1000);
-}
-
-// Agregar tooltips informativos
-function addTooltips() {
-    const tooltips = {
-        'totalRevenue': 'Suma total de ingresos en el período seleccionado',
-        'totalOrders': 'Número total de órdenes procesadas',
-        'uniqueCustomers': 'Clientes únicos que han realizado compras',
-        'avgOrderValue': 'Valor promedio por orden (ticket promedio)',
-        'totalKilos': 'Total de kilogramos de arena vendidos',
-        'totalBags': 'Total de bolsas vendidas',
-        'avgPricePerKg': 'Precio promedio por kilogramo',
-        'avgFulfillmentDays': 'Días promedio entre pago y envío'
-    };
-
-    Object.entries(tooltips).forEach(([id, tooltip]) => {
-        const element = document.getElementById(id);
-        if (element && element.parentNode) {
-            element.parentNode.setAttribute('title', tooltip);
-        }
-    });
-}
-
-// // ===== GENERACIÓN DE INSIGHTS Y ALERTAS AUTOMÁTICAS =====
-
-// Generar insights automáticos de K-mita
-    function generateKmitaInsights() {
-        const insights = calculateBusinessInsights();
-        displayInsights(insights);
-
-        const customerAlerts = generateCustomerAlerts();
-        displayCustomerAlerts(customerAlerts);
-    }
-
-// Calcular insights del negocio
-function calculateBusinessInsights() {
-    const filteredOrders = filterOrdersByPeriod(ordersData);
     const insights = [];
 
-    // Insight 1: Análisis de crecimiento
-    const monthlyGrowth = calculateMonthlyGrowth(filteredOrders);
-    if (monthlyGrowth.trend === 'up') {
+    // Calcular métricas básicas
+    const totalRevenue = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
+    const totalOrders = filteredOrders.length;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+    // Análisis de crecimiento mensual
+    const monthlyData = calculateMonthlySales(filteredOrders);
+    if (monthlyData.length >= 2) {
+        const lastMonth = monthlyData[monthlyData.length - 1];
+        const prevMonth = monthlyData[monthlyData.length - 2];
+
+        const revenueGrowth = prevMonth.revenue > 0 ?
+            ((lastMonth.revenue - prevMonth.revenue) / prevMonth.revenue * 100) : 0;
+
+        if (revenueGrowth > 10) {
+            insights.push({
+                type: 'success',
+                icon: '📈',
+                title: 'Crecimiento Excelente',
+                message: `Ingresos aumentaron ${revenueGrowth.toFixed(1)}% vs mes anterior`
+            });
+        } else if (revenueGrowth < -10) {
+            insights.push({
+                type: 'warning',
+                icon: '📉',
+                title: 'Descenso en Ventas',
+                message: `Ingresos disminuyeron ${Math.abs(revenueGrowth).toFixed(1)}% vs mes anterior`
+            });
+        }
+    }
+
+    // Análisis de clientes
+    const vipCustomers = customers.filter(c => c.segment === 'VIP').length;
+    const inactiveCustomers = customers.filter(c =>
+        c.lastOrder && (new Date() - c.lastOrder) > (90 * 24 * 60 * 60 * 1000)
+    ).length;
+
+    if (vipCustomers > 0) {
         insights.push({
             type: 'success',
-            title: '📈 Crecimiento Positivo',
-            message: `Las ventas han crecido ${monthlyGrowth.percentage}% en el último mes. ¡Excelente trabajo!`
-        });
-    } else if (monthlyGrowth.trend === 'down') {
-        insights.push({
-            type: 'warning',
-            title: '📉 Atención: Disminución en Ventas',
-            message: `Las ventas han disminuido ${Math.abs(monthlyGrowth.percentage)}% en el último mes. Considera estrategias de reactivación.`
+            icon: '👑',
+            title: 'Clientes VIP',
+            message: `${vipCustomers} clientes generan alto valor recurrente`
         });
     }
 
-    // Insight 2: Análisis de clientes inactivos
-    const inactiveCustomers = calculateInactiveCustomers();
-    if (inactiveCustomers.count > 0) {
+    if (inactiveCustomers > 0) {
         insights.push({
             type: 'info',
-            title: '👥 Oportunidad de Reactivación',
-            message: `${inactiveCustomers.count} clientes no han comprado en más de 90 días. Valor potencial: $${inactiveCustomers.potentialValue.toFixed(2)}`
+            icon: '😴',
+            title: 'Clientes Inactivos',
+            message: `${inactiveCustomers} clientes necesitan reactivación`
         });
     }
 
-    // Insight 3: Análisis de productos
-    const topProduct = getTopProductByKilos(filteredOrders);
-    if (topProduct) {
+    // Análisis de productos
+    const topProducts = calculateTopProducts(filteredOrders);
+    if (topProducts.length > 0) {
+        const topProduct = topProducts[0];
         insights.push({
             type: 'success',
-            title: '🏆 Producto Estrella',
-            message: `${topProduct.name} es tu producto más vendido con ${topProduct.kilos.toFixed(1)} kg vendidos.`
+            icon: '🏆',
+            title: 'Producto Estrella',
+            message: `${topProduct.kilos}kg es tu producto más vendido`
         });
     }
 
-    // Insight 4: Análisis geográfico
-    const topState = getTopStateByRevenue(filteredOrders);
+    // Análisis geográfico
+    const stateSales = {};
+    filteredOrders.forEach(order => {
+        const state = order.shipping_province || 'No especificado';
+        stateSales[state] = (stateSales[state] || 0) + parseFloat(order.total_price || 0);
+    });
+
+    const topState = Object.entries(stateSales)
+        .sort(([,a], [,b]) => b - a)[0];
+
     if (topState) {
         insights.push({
             type: 'info',
-            title: '🌎 Mercado Principal',
-            message: `${topState.state} representa el ${topState.percentage}% de tus ventas totales ($${topState.revenue.toFixed(2)}).`
+            icon: '📍',
+            title: 'Mercado Principal',
+            message: `${topState[0]} es tu estado con más ventas`
         });
     }
 
-    // Insight 5: Análisis de fulfillment
-    const fulfillmentAnalysis = analyzeFulfillmentPerformance(filteredOrders);
-    if (fulfillmentAnalysis.avgDays > 3) {
+    // Análisis de fulfillment
+    const fulfillmentDays = filteredOrders
+        .map(order => calculateFulfillmentDays(order.created_at, order.processed_at || order.fulfillment_created_at))
+        .filter(days => days !== null && days >= 0);
+
+    const avgFulfillmentDays = fulfillmentDays.length > 0 ?
+        fulfillmentDays.reduce((sum, days) => sum + days, 0) / fulfillmentDays.length : 0;
+
+    if (avgFulfillmentDays > 3) {
         insights.push({
             type: 'warning',
-            title: '🚚 Optimizar Fulfillment',
-            message: `El tiempo promedio de fulfillment es ${fulfillmentAnalysis.avgDays.toFixed(1)} días. Considera optimizar el proceso.`
+            icon: '⏰',
+            title: 'Fulfillment Lento',
+            message: `Tiempo promedio de entrega: ${avgFulfillmentDays.toFixed(1)} días`
         });
-    } else {
+    } else if (avgFulfillmentDays > 0) {
         insights.push({
             type: 'success',
-            title: '⚡ Fulfillment Eficiente',
-            message: `Excelente tiempo de fulfillment: ${fulfillmentAnalysis.avgDays.toFixed(1)} días promedio.`
+            icon: '⚡',
+            title: 'Fulfillment Eficiente',
+            message: `Entregas rápidas: ${avgFulfillmentDays.toFixed(1)} días promedio`
         });
     }
 
     return insights;
-}
-
-// Calcular crecimiento mensual
-function calculateMonthlyGrowth(orders) {
-    const now = new Date();
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-    const currentMonthOrders = orders.filter(order => {
-        const orderDate = new Date(order.created_at || order.order_date);
-        return orderDate >= currentMonth;
-    });
-
-    const previousMonthOrders = orders.filter(order => {
-        const orderDate = new Date(order.created_at || order.order_date);
-        return orderDate >= previousMonth && orderDate < currentMonth;
-    });
-
-    const currentRevenue = currentMonthOrders.reduce((sum, order) =>
-        sum + parseFloat(order.total_price || 0), 0);
-    const previousRevenue = previousMonthOrders.reduce((sum, order) =>
-        sum + parseFloat(order.total_price || 0), 0);
-
-    if (previousRevenue === 0) return { trend: 'neutral', percentage: 0 };
-
-    const percentage = ((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1);
-    const trend = percentage > 0 ? 'up' : percentage < 0 ? 'down' : 'neutral';
-
-    return { trend, percentage: Math.abs(percentage) };
-}
-
-// Calcular clientes inactivos
-function calculateInactiveCustomers() {
-    const customerAnalysis = calculateCustomerAnalysis(ordersData);
-    const inactiveCustomers = customerAnalysis.filter(customer => customer.status === 'INACTIVE');
-    const potentialValue = inactiveCustomers.reduce((sum, customer) =>
-        sum + (customer.totalSpent / customer.totalOrders), 0);
-
-    return {
-        count: inactiveCustomers.length,
-        potentialValue: potentialValue
-    };
-}
-
-// Obtener producto top por kilos
-function getTopProductByKilos(orders) {
-    const productMap = new Map();
-
-    orders.forEach(order => {
-        const productName = order.product_title || order.product_name || 'Arena K-mita';
-        const kilos = parseFloat(order.total_kilos || order.kilos || 0);
-
-        if (productMap.has(productName)) {
-            productMap.set(productName, productMap.get(productName) + kilos);
-        } else {
-            productMap.set(productName, kilos);
-        }
-    });
-
-    let topProduct = null;
-    let maxKilos = 0;
-
-    productMap.forEach((kilos, name) => {
-        if (kilos > maxKilos) {
-            maxKilos = kilos;
-            topProduct = { name, kilos };
-        }
-    });
-
-    return topProduct;
-}
-
-// Obtener estado top por ingresos
-function getTopStateByRevenue(orders) {
-    const stateMap = new Map();
-    let totalRevenue = 0;
-
-    orders.forEach(order => {
-        const state = order.shipping_address_province || order.state || 'N/A';
-        const revenue = parseFloat(order.total_price || 0);
-        totalRevenue += revenue;
-
-        if (stateMap.has(state)) {
-            stateMap.set(state, stateMap.get(state) + revenue);
-        } else {
-            stateMap.set(state, revenue);
-        }
-    });
-
-    let topState = null;
-    let maxRevenue = 0;
-
-    stateMap.forEach((revenue, state) => {
-        if (revenue > maxRevenue && state !== 'N/A') {
-            maxRevenue = revenue;
-            topState = {
-                state,
-                revenue,
-                percentage: ((revenue / totalRevenue) * 100).toFixed(1)
-            };
-        }
-    });
-
-    return topState;
-}
-
-// Analizar performance de fulfillment
-function analyzeFulfillmentPerformance(orders) {
-    const fulfillmentTimes = orders.map(order => {
-        const orderDate = new Date(order.created_at || order.order_date);
-        const fulfilledDate = new Date(order.fulfilled_at || order.updated_at);
-        const days = Math.ceil((fulfilledDate - orderDate) / (1000 * 60 * 60 * 24));
-        return isNaN(days) || days < 0 ? 0 : days;
-    }).filter(days => days > 0);
-
-    const avgDays = fulfillmentTimes.length > 0 ?
-        fulfillmentTimes.reduce((sum, days) => sum + days, 0) / fulfillmentTimes.length : 0;
-
-    return { avgDays, totalOrders: fulfillmentTimes.length };
 }
 
 // Mostrar insights en el dashboard
@@ -2469,260 +1744,41 @@ function displayInsights(insights) {
     const container = document.getElementById('insightsContainer');
     if (!container) return;
 
+    if (insights.length === 0) {
+        container.innerHTML = `
+            <div class="insight-card info">
+                <div class="insight-icon">💡</div>
+                <div class="insight-content">
+                    <h4>Procesando Insights</h4>
+                    <p>Los insights se generarán cuando haya más datos disponibles</p>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
     container.innerHTML = '';
 
     insights.forEach(insight => {
         const insightCard = document.createElement('div');
         insightCard.className = `insight-card ${insight.type}`;
         insightCard.innerHTML = `
-            <h4>${insight.title}</h4>
-            <p>${insight.message}</p>
+            <div class="insight-icon">${insight.icon}</div>
+            <div class="insight-content">
+                <h4>${insight.title}</h4>
+                <p>${insight.message}</p>
+            </div>
         `;
         container.appendChild(insightCard);
     });
 }
 
-// Generar alertas de clientes
-function generateCustomerAlerts() {
-    const customerAnalysis = calculateCustomerAnalysis(ordersData);
-    const alerts = [];
-
-    // Clientes de alto valor en riesgo
-    const highValueAtRisk = customerAnalysis.filter(customer =>
-        customer.status === 'AT_RISK' && customer.totalSpent > 1000
-    );
-
-    highValueAtRisk.forEach(customer => {
-        alerts.push({
-            type: 'warning',
-            title: '⚠️ Cliente de Alto Valor en Riesgo',
-            message: `${customer.email} (${customer.daysSinceLastOrder} días sin comprar) - Valor total: $${customer.totalSpent.toFixed(2)}`
-        });
-    });
-
-    // Clientes inactivos con potencial
-    const inactiveHighPotential = customerAnalysis.filter(customer =>
-        customer.status === 'INACTIVE' && customer.totalOrders >= 3
-    );
-
-    inactiveHighPotential.slice(0, 5).forEach(customer => {
-        alerts.push({
-            type: 'info',
-            title: '💤 Cliente Inactivo con Historial',
-            message: `${customer.email} - ${customer.totalOrders} órdenes previas, ${customer.daysSinceLastOrder} días inactivo`
-        });
-    });
-
-    // Nuevos clientes potenciales (1 sola compra hace más de 30 días)
-    const newCustomersPotential = customerAnalysis.filter(customer =>
-        customer.totalOrders === 1 && customer.daysSinceLastOrder > 30 && customer.daysSinceLastOrder < 90
-    );
-
-    newCustomersPotential.slice(0, 3).forEach(customer => {
-        alerts.push({
-            type: 'info',
-            title: '🆕 Nuevo Cliente - Oportunidad',
-            message: `${customer.email} - 1 compra hace ${customer.daysSinceLastOrder} días. Considera campaña de seguimiento.`
-        });
-    });
-
-    return alerts;
+// Generar insights de K-mita
+function generateKmitaInsights() {
+    console.log('Generando insights de K-mita...');
+    const insights = generateBusinessInsights();
+    displayInsights(insights);
+    generateCustomerAlerts();
 }
 
-// Mostrar alertas de clientes
-function displayCustomerAlerts(alerts) {
-    const container = document.getElementById('customerAlerts');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    if (alerts.length === 0) {
-        container.innerHTML = `
-            <div class="alert-card info">
-                <h5>✅ Todo en Orden</h5>
-                <p>No hay alertas críticas de clientes en este momento.</p>
-            </div>
-        `;
-        return;
-    }
-
-    alerts.forEach(alert => {
-        const alertCard = document.createElement('div');
-        alertCard.className = `alert-card ${alert.type}`;
-        alertCard.innerHTML = `
-            <h5>${alert.title}</h5>
-            <p>${alert.message}</p>
-        `;
-        container.appendChild(alertCard);
-    });
-}
-
-// Función para procesar datos mensuales mejorada
-function processMonthlyData(orders) {
-    const monthlyMap = new Map();
-
-    orders.forEach(order => {
-        const orderDate = new Date(order.created_at || order.order_date);
-        if (isNaN(orderDate.getTime())) return;
-
-        const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-
-        if (!monthlyMap.has(monthKey)) {
-            monthlyMap.set(monthKey, {
-                revenue: 0,
-                orders: 0,
-                customers: new Set(),
-                kilos: 0,
-                bags: 0
-            });
-        }
-
-        const monthData = monthlyMap.get(monthKey);
-        monthData.revenue += parseFloat(order.total_price || 0);
-        monthData.orders += 1;
-        monthData.customers.add(order.customer_email || order.email);
-        monthData.kilos += parseFloat(order.total_kilos || order.kilos || 0);
-        monthData.bags += parseFloat(order.total_bags || order.bags || 1);
-    });
-
-    // Convertir a arrays ordenados
-    const sortedEntries = Array.from(monthlyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-
-    return {
-        labels: sortedEntries.map(([key]) => {
-            const [year, month] = key.split('-');
-            const date = new Date(year, month - 1);
-            return date.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
-        }),
-        revenue: sortedEntries.map(([, data]) => data.revenue),
-        orders: sortedEntries.map(([, data]) => data.orders),
-        customers: sortedEntries.map(([, data]) => data.customers.size),
-        kilos: sortedEntries.map(([, data]) => data.kilos),
-        bags: sortedEntries.map(([, data]) => data.bags)
-    };
-}
-
-// Función para procesar datos de productos K-mita
-function processKmitaProductData(orders) {
-    const productMap = new Map();
-
-    orders.forEach(order => {
-        const productName = order.product_title || order.product_name || 'Arena K-mita';
-        const kilos = parseFloat(order.total_kilos || order.kilos || 0);
-
-        if (productMap.has(productName)) {
-            productMap.set(productName, productMap.get(productName) + kilos);
-        } else {
-            productMap.set(productName, kilos);
-        }
-    });
-
-    // Convertir a array y ordenar por kilos
-    const sortedProducts = Array.from(productMap.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10); // Top 10 productos
-
-    return {
-        labels: sortedProducts.map(([name]) => name.length > 20 ? name.substring(0, 20) + '...' : name),
-        kilos: sortedProducts.map(([, kilos]) => kilos)
-    };
-}
-
-// Función para procesar datos geográficos
-function processGeographicData(orders) {
-    const stateMap = new Map();
-
-    orders.forEach(order => {
-        const state = order.shipping_address_province || order.state || 'N/A';
-        const revenue = parseFloat(order.total_price || 0);
-
-        if (stateMap.has(state)) {
-            stateMap.set(state, stateMap.get(state) + revenue);
-        } else {
-            stateMap.set(state, revenue);
-        }
-    });
-
-    // Convertir a array y ordenar por ingresos
-    const sortedStates = Array.from(stateMap.entries())
-        .filter(([state]) => state !== 'N/A')
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10); // Top 10 estados
-
-    return {
-        labels: sortedStates.map(([state]) => state),
-        values: sortedStates.map(([, revenue]) => revenue)
-    };
-}//
- // ===== FUNCIONES PARA TABLAS EXISTENTES =====
-
-    // Poblar tabla de top clientes
-    function populateTopCustomersTable() {
-        const tbody = document.getElementById('topCustomersBody');
-        if (!tbody) return;
-
-        const filteredOrders = filterOrdersByPeriod(ordersData);
-        const customerAnalysis = calculateCustomerAnalysis(filteredOrders);
-        const topCustomers = customerAnalysis.slice(0, 10); // Top 10
-
-        tbody.innerHTML = '';
-
-        topCustomers.forEach(customer => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-            <td>${customer.email}</td>
-            <td>${customer.totalOrders}</td>
-            <td>$${customer.totalSpent.toFixed(2)}</td>
-            <td>$${(customer.totalSpent / customer.totalOrders).toFixed(2)}</td>
-            <td>
-                <span class="status-badge ${customer.status.toLowerCase()}">
-                    ${customer.status === 'ACTIVE' ? 'VIP' : customer.status === 'AT_RISK' ? 'Regular' : 'Inactivo'}
-                </span>
-            </td>
-            <td>${customer.lastOrderDate}</td>
-        `;
-            tbody.appendChild(row);
-        });
-    }
-
-// Poblar tabla de análisis mensual
-function populateMonthlyAnalysisTable() {
-    const tbody = document.getElementById('monthlyAnalysisBody');
-    if (!tbody) return;
-
-    const monthlyData = processMonthlyData(ordersData);
-
-    tbody.innerHTML = '';
-
-    for (let i = 0; i < monthlyData.labels.length; i++) {
-        const row = document.createElement('tr');
-        const avgTicket = monthlyData.orders[i] > 0 ? monthlyData.revenue[i] / monthlyData.orders[i] : 0;
-        const avgFulfillment = calculateMonthlyFulfillment(monthlyData.labels[i]);
-
-        row.innerHTML = `
-            <td>${monthlyData.labels[i]}</td>
-            <td>${monthlyData.orders[i]}</td>
-            <td>$${monthlyData.revenue[i].toFixed(2)}</td>
-            <td>${monthlyData.customers[i]}</td>
-            <td>$${avgTicket.toFixed(2)}</td>
-            <td>${monthlyData.kilos[i].toFixed(1)} kg</td>
-            <td>${avgFulfillment.toFixed(1)} días</td>
-        `;
-        tbody.appendChild(row);
-    }
-}
-
-// Calcular fulfillment promedio mensual
-function calculateMonthlyFulfillment(monthLabel) {
-    // Implementación simplificada - en producción sería más compleja
-    const filteredOrders = filterOrdersByPeriod(ordersData);
-    const fulfillmentTimes = filteredOrders.map(order => {
-        const orderDate = new Date(order.created_at || order.order_date);
-        const fulfilledDate = new Date(order.fulfilled_at || order.updated_at);
-        const days = Math.ceil((fulfilledDate - orderDate) / (1000 * 60 * 60 * 24));
-        return isNaN(days) || days < 0 ? 0 : days;
-    }).filter(days => days > 0);
-
-    return fulfillmentTimes.length > 0 ?
-        fulfillmentTimes.reduce((sum, days) => sum + days, 0) / fulfillmentTimes.length : 0;
-}
+console.log('✅ Script K-mita Analytics cargado correctamente');

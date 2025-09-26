@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="shopify-analytics-styles.css">
     <script src="config.js"></script>
     <script src="validate-setup.js"></script>
+    <script src="charts-fix.js"></script>
 </head>
 <body>
     <!-- Pantalla de Login -->
@@ -40,7 +41,6 @@
             <div class="data-source-info">
                 <span id="dataSourceStatus">🔄 Conectando a Google Sheets...</span>
                 <button id="refreshData" class="refresh-btn">🔄 Actualizar Datos</button>
-                <button id="toggleDemo" class="refresh-btn">📊 Usar Datos Reales</button>
                 <button id="logoutBtn" class="logout-btn">🚪 Cerrar Sesión</button>
             </div>
         </header>
@@ -99,12 +99,12 @@
                     <small id="bagsChange">-</small>
                 </div>
             </div>
-            <div class="kpi-card price-kg">
-                <div class="kpi-icon">⚖️</div>
+            <div class="kpi-card price-per-kg">
+                <div class="kpi-icon">💰</div>
                 <div class="kpi-content">
                     <h3>Precio Promedio/Kg</h3>
-                    <span id="avgPricePerKg">-</span>
-                    <small id="priceKgChange">-</small>
+                    <span id="avgPricePerKilo">-</span>
+                    <small>--</small>
                 </div>
             </div>
             <div class="kpi-card fulfillment">
@@ -112,7 +112,7 @@
                 <div class="kpi-content">
                     <h3>Días Promedio Fulfillment</h3>
                     <span id="avgFulfillmentDays">-</span>
-                    <small id="fulfillmentChange">-</small>
+                    <small>--</small>
                 </div>
             </div>
         </div>
@@ -170,7 +170,7 @@
             <!-- Marketing Performance -->
             <div class="chart-container">
                 <h3>📧 Performance de Marketing</h3>
-                <canvas id="marketingChart"></canvas>
+                <canvas id="marketingPerformanceChart"></canvas>
             </div>
 
             <!-- Análisis de Descuentos -->
@@ -195,7 +195,11 @@
         <!-- Análisis Geográfico -->
         <div class="charts-grid">
             <div class="chart-container large">
-                <h3>🌎 Ventas por Estado</h3>
+                <h3>🌎 Ventas por Estado (Top 10)</h3>
+                <canvas id="salesByStateChart"></canvas>
+            </div>
+            <div class="chart-container large">
+                <h3>🌎 Distribución de Ventas por Estado</h3>
                 <canvas id="statesChart"></canvas>
             </div>
         </div>
@@ -322,6 +326,39 @@
             </div>
         </div>
 
+        <!-- Tabla de Análisis Detallado -->
+        <div class="data-tables">
+            <div class="table-section">
+                <h3>🔍 Análisis Detallado por Orden</h3>
+                <p style="color: #9ca3af; margin-bottom: 20px;">
+                    Vista detallada de órdenes con información de fulfillment, ubicación y métodos de pago
+                </p>
+                <div class="table-wrapper">
+                    <table id="detailedAnalysisTable">
+                        <thead>
+                            <tr>
+                                <th>Orden #</th>
+                                <th>Ciudad</th>
+                                <th>Estado</th>
+                                <th>Método Pago</th>
+                                <th>Fecha Fulfillment</th>
+                                <th>Días Fulfillment</th>
+                                <th>Total</th>
+                                <th>Kilos</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailedAnalysisBody">
+                            <tr class="loading-row">
+                                <td colspan="8" style="text-align: center; padding: 40px; color: #9ca3af;">
+                                    🔄 Cargando análisis detallado...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- Alertas de Clientes -->
         <div class="insights-section">
             <h3>🚨 Alertas de Clientes Inactivos</h3>
@@ -339,7 +376,7 @@
         </div>
     </div>
 
-    <script src="shopify-analytics-script.js"></script>
+    <script src="shopify-analytics-script.js?v=1"></script>
     </div>
 </body>
 </html>

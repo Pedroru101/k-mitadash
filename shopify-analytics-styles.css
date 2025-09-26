@@ -1118,3 +1118,106 @@ header p {
     font-size: 13px;
     line-height: 1.4;
 }
+
+/* Detalles expandibles en alertas */
+.alert-details {
+    margin-top: 15px;
+}
+
+.alert-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+
+.alert-details summary:hover {
+    color: #1f2937;
+}
+
+.alert-table-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+}
+
+.alert-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.alert-table th {
+    background: #f8fafc;
+    color: #374151;
+    font-weight: 600;
+    padding: 8px 6px;
+    text-align: left;
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.alert-table td {
+    padding: 6px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+    font-size: 12px;
+}
+
+.alert-table tr:hover {
+    background: #f9fafb;
+}
+
+.alert-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #6b7280;
+    font-style: italic;
+    text-align: center;
+}
+
+.alert-actions {
+    margin-top: 15px;
+    text-align: center;
+    padding-top: 10px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.show-all-btn,
+.show-top-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.show-all-btn:hover,
+.show-top-btn:hover {
+    background: #2563eb;
+}
+
+.show-top-btn {
+    background: #6b7280;
+}
+
+.show-top-btn:hover {
+    background: #4b5563;
+}
+
+.alert-table-section {
+    margin-bottom: 15px;
+}
