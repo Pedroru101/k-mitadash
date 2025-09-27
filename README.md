@@ -81,12 +81,15 @@ address_city, address_province, address_country
 ```
 k-mitadash/
 ├── shopify-analytics-dashboard.html    # Dashboard principal
-├── shopify-analytics-script.js         # Lógica de datos K-mita
-├── shopify-analytics-styles.css        # Estilos del dashboard
+├── shopify-analytics-script.js         # Script principal integrado con toda la lógica
+├── styles.css                         # Estilos base con Tailwind
 ├── config.js                          # Configuración centralizada
-├── simple-dashboard.html              # Dashboard con datos demo
-├── simple-dashboard.js                # Lógica del dashboard demo
-├── sample-data.json                   # Datos de ejemplo
+├── validate-setup.js                  # Herramientas de validación y debugging
+├── sample-data.json                   # Datos de ejemplo para fallback
+├── server.js                          # Servidor Node.js para desarrollo
+├── server.py                          # Servidor Python alternativo
+├── package.json                       # Configuración del proyecto
+├── netlify.toml                       # Configuración de despliegue
 ├── .env                              # Variables de entorno
 └── README.md                         # Documentación
 ```
@@ -95,9 +98,26 @@ k-mitadash/
 
 - **Frontend**: HTML5, CSS3, JavaScript ES6+
 - **Gráficos**: Chart.js v3
-- **API**: Google Sheets API v4
+- **API**: Google Sheets CSV Export (público, sin API key)
+- **Estilos**: Tailwind CSS
 - **Diseño**: Responsive, Mobile-first
 - **Autenticación**: Sistema propio
+- **Despliegue**: Netlify
+
+## 🔧 Arquitectura Optimizada
+
+### Script Principal Integrado
+- **Consolidación**: Toda la lógica en `shopify-analytics-script.js`
+- **Integración**: Dashboard optimizado integrado directamente
+- **Eliminación de Duplicados**: Funciones consolidadas sin repetición
+- **Gestión de Estado**: Manejo centralizado de autenticación y datos
+
+### Características de la Organización
+- ✅ **Sin Duplicación**: Eliminados archivos redundantes
+- ✅ **Carga Optimizada**: Solo scripts necesarios
+- ✅ **Fallback Inteligente**: Datos de muestra cuando Google Sheets no está disponible
+- ✅ **Debugging Integrado**: Herramientas de validación incluidas
+- ✅ **Configuración Centralizada**: Todo en `config.js`
 
 ## 📊 Métricas K-mita Específicas
 

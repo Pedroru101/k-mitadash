@@ -299,8 +299,50 @@ async function loadShopifyData() {
 
     } catch (error) {
         console.error('Error cargando datos K-mita:', error);
-        updateDataSourceStatus(`❌ Error: ${error.message}`);
-        isDataLoaded = false;
+        console.log('[FALLBACK] Intentando cargar datos de muestra...');
+        
+        try {
+            await loadSampleData();
+        } catch (fallbackError) {
+            console.error('Error cargando datos de muestra:', fallbackError);
+            updateDataSourceStatus(`❌ Error: ${error.message} - Sin datos de respaldo`);
+            isDataLoaded = false;
+        }
+    }
+}
+
+// Función para cargar datos de muestra como fallback
+async function loadSampleData() {
+    console.log('[FALLBACK] Cargando datos de muestra desde sample-data.json');
+    updateDataSourceStatus('🔄 Cargando datos de muestra...');
+
+    try {
+        const response = await fetch('sample-data.json');
+        if (!response.ok) {
+            throw new Error(`Error cargando sample-data.json: ${response.status}`);
+        }
+
+        const sampleData = await response.json();
+        
+        ordersData = sampleData.orders || [];
+        customersData = sampleData.customers || [];
+
+        console.log('Datos de muestra cargados:', {
+            ordersCount: ordersData.length,
+            customersCount: customersData.length
+        });
+
+        isDataLoaded = true;
+        lastDataUpdate = new Date();
+
+        updateDataSourceStatus(`✅ Datos de muestra cargados: ${ordersData.length} órdenes, ${customersData.length} clientes`);
+
+        // Procesar datos
+        processAndDisplayData();
+
+    } catch (error) {
+        console.error('Error cargando datos de muestra:', error);
+        throw error;
     }
 }
 
@@ -1338,9 +1380,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Configurar filtros de período
 function setupPeriodFilters() {
-    const filterButtons = document.querySelectorAll('.filter-btn');
+    const filterButtons = document.querySelectorAll('.period-btn');
+    
+    console.log(`[FILTER] Encontrados ${filterButtons.length} botones de período`);
 
     filterButtons.forEach(button => {
+        console.log(`[FILTER] Configurando botón: ${button.textContent} (${button.getAttribute('data-period')})`);
+        
         button.addEventListener('click', function() {
             // Remover clase activa de todos los botones
             filterButtons.forEach(btn => btn.classList.remove('active'));
@@ -1349,23 +1395,52 @@ function setupPeriodFilters() {
             this.classList.add('active');
 
             // Actualizar período actual
-            currentPeriod = this.getAttribute('data-period');
+            const newPeriod = this.getAttribute('data-period');
+            console.log(`[FILTER] Cambiando período de '${currentPeriod}' a '${newPeriod}'`);
+            currentPeriod = newPeriod;
 
-            console.log(`[FILTER] Período cambiado a: ${currentPeriod}`);
+            // Actualizar indicador de estado del filtro
+            updateFilterStatus(this.textContent);
 
             // Actualizar dashboard con el nuevo filtro
             if (isDataLoaded) {
+                console.log('[FILTER] Actualizando dashboard con nuevo filtro...');
                 processAndDisplayData();
+            } else {
+                console.log('[FILTER] Datos no cargados aún, filtro aplicado para próxima carga');
             }
         });
     });
 
-    console.log('[FILTER] Filtros de período configurados');
+    console.log('[FILTER] Filtros de período configurados correctamente');
+}
+
+// Función para actualizar el indicador de estado del filtro
+function updateFilterStatus(filterText) {
+    const filterStatus = document.getElementById('filterStatus');
+    const filterStatusText = document.getElementById('filterStatusText');
+    
+    if (filterStatus && filterStatusText) {
+        filterStatusText.textContent = filterText;
+        
+        // Mostrar el indicador si no es "Todo el tiempo"
+        if (currentPeriod === 'all') {
+            filterStatus.style.display = 'none';
+        } else {
+            filterStatus.style.display = 'inline-flex';
+        }
+    }
 }
 
 // Función para filtrar datos por período
 function filterDataByPeriod(data) {
-    if (!data || currentPeriod === 'all') {
+    if (!data) {
+        console.log('[FILTER] No hay datos para filtrar');
+        return [];
+    }
+    
+    if (currentPeriod === 'all') {
+        console.log(`[FILTER] Mostrando todos los datos: ${data.length} registros`);
         return data;
     }
 
@@ -1386,13 +1461,19 @@ function filterDataByPeriod(data) {
             cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
             break;
         default:
+            console.log(`[FILTER] Período desconocido: ${currentPeriod}, mostrando todos los datos`);
             return data;
     }
 
-    return data.filter(item => {
+    const filteredData = data.filter(item => {
         const itemDate = new Date(item.created_at);
         return !isNaN(itemDate.getTime()) && itemDate >= cutoffDate;
     });
+
+    console.log(`[FILTER] Período: ${currentPeriod}, Fecha corte: ${cutoffDate.toLocaleDateString('es-MX')}`);
+    console.log(`[FILTER] Datos filtrados: ${filteredData.length} de ${data.length} registros`);
+
+    return filteredData;
 }
 
 // ===========================================

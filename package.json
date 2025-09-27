@@ -5,7 +5,8 @@
   "main": "simple-dashboard.html",
   "scripts": {
     "start": "python server.py",
-    "build": "echo 'Build completed - Static files ready'",
+    "build": "tailwindcss -i ./styles.css -o ./shopify-analytics-styles.css --watch",
+    "build:prod": "tailwindcss -i ./styles.css -o ./shopify-analytics-styles.css --minify",
     "dev": "python -m http.server 8080",
     "deploy": "netlify deploy --prod"
   },
@@ -23,5 +24,10 @@
     "type": "git",
     "url": "https://github.com/k-mita/analytics-dashboard.git"
   },
-  "homepage": "https://k-mita-analytics.netlify.app"
+  "homepage": "https://k-mita-analytics.netlify.app",
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.0"
+  }
 }
