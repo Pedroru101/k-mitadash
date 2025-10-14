@@ -61,6 +61,9 @@
                 <div class="header-left">
                     <h1 class="dashboard-title">🐈 K-mita Analytics</h1>
                     <div id="dataSourceStatus" class="data-source-status">Cargando datos...</div>
+                    <div id="autoRefreshStatus" class="auto-refresh-status" style="display: none;">
+                        🔄 Auto-refresh: Configurado para 6 horas
+                    </div>
                     <div id="filterStatus" class="filter-status" style="display: none;">
                         📅 <span id="filterStatusText">Todo el tiempo</span>
                     </div>
@@ -146,6 +149,7 @@
                     <button class="period-btn" data-period="6m">Últimos 6 meses</button>
                     <button class="period-btn" data-period="3m">Últimos 3 meses</button>
                     <button class="period-btn" data-period="1m">Último mes</button>
+                    <button class="period-btn" id="monthlyReportBtn">INFORME MENSUAL</button>
                 </div>
             </section>
 

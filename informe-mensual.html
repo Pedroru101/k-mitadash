@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe Mensual - K-mita Analytics</title>
+    <script src="config.js"></script>
+    <link rel="stylesheet" href="shopify-analytics-styles.css">
+    <link rel="icon" type="image/x-icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐈</text></svg>">
+</head>
+
+<body>
+    <!-- Dashboard -->
+    <div id="dashboardContainer">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="dashboard-title">🐈 K-mita Analytics - Informe Mensual</h1>
+                    <div id="dataSourceStatus" class="data-source-status">Reporte de volúmenes 2025</div>
+                </div>
+                <div class="header-actions">
+                    <button id="backBtn" class="k-btn k-btn-secondary">← Volver al Dashboard</button>
+                    <button id="exportBtn" class="k-btn k-btn-secondary">📊 Exportar</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Report Section -->
+            <section class="report-section">
+                <div class="report-card">
+                    <h2 class="section-title">📊 Solicitud de Informe Mensual</h2>
+                    
+                    <div class="report-content">
+                        <div class="message-box">
+                            <div class="report-message">
+                                <p><strong>Solicitud:</strong></p>
+                                <p>Nos podrías enviar reporte de los volúmenes en bolsas y kilos por tipo de presentación por cada mes de este año 2025 por destino por favor con totales mensuales y totales anuales.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="report-info">
+                            <p class="info-text">
+                                Este informe mensual proporciona un análisis detallado de los volúmenes de ventas,
+                                incluyendo bolsas y kilos por tipo de presentación, organizados por mes y destino
+                                para el año 2025. Incluye totales mensuales y anuales acumulados.
+                            </p>
+                        </div>
+
+                        <!-- Filtro de Selección de Mes -->
+                        <div class="month-filter-section">
+                            <h3 class="filter-title">📅 Seleccionar Mes para el Informe</h3>
+                            <div class="month-filters">
+                                <button class="month-btn" data-month="1">Enero</button>
+                                <button class="month-btn" data-month="2">Febrero</button>
+                                <button class="month-btn" data-month="3">Marzo</button>
+                                <button class="month-btn" data-month="4">Abril</button>
+                                <button class="month-btn" data-month="5">Mayo</button>
+                                <button class="month-btn" data-month="6">Junio</button>
+                                <button class="month-btn" data-month="7">Julio</button>
+                                <button class="month-btn" data-month="8">Agosto</button>
+                                <button class="month-btn" data-month="9">Septiembre</button>
+                                <button class="month-btn active" data-month="10">Octubre</button>
+                                <button class="month-btn disabled" data-month="11" disabled>Noviembre</button>
+                                <button class="month-btn disabled" data-month="12" disabled>Diciembre</button>
+                            </div>
+                            <div class="selected-month-info">
+                                <span id="selectedMonthText">Mes seleccionado: <strong>Octubre 2025</strong></span>
+                            </div>
+                            <div class="report-instructions">
+                                <div class="instruction-icon">📊</div>
+                                <h4>Informe Mensual 2025</h4>
+                                <p>Haz clic en "Generar Informe Mensual" para ver los datos detallados</p>
+                            </div>
+                        </div>
+
+                        <div class="report-actions">
+                            <button id="generateReportBtn" class="k-btn k-btn-primary">
+                                📈 Generar Informe Mensual
+                            </button>
+                            <button id="exportReportBtn" class="k-btn k-btn-secondary">
+                                📄 Exportar a Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Preview -->
+                <div class="report-preview">
+                    <div id="reportContent" class="report-data hidden">
+                        <!-- Aquí se mostrará el reporte generado -->
+                    </div>
+                    
+                    <div id="reportPlaceholder" class="preview-placeholder hidden">
+                        <!-- Placeholder removido - ahora está en la sección de filtros -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="informe-mensual-script.js"></script>
+</body>
+
+</html>

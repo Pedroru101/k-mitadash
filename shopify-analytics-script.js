@@ -34,6 +34,7 @@ let customersData = [];
 let currentPeriod = 'all';
 let isDataLoaded = false;
 let lastDataUpdate = null;
+let autoRefreshInterval = null;
 
 // ===========================================
 // FUNCIONES DE AUTENTICACIÓN
@@ -120,6 +121,9 @@ function handleLogout() {
     sessionStorage.removeItem('kmita_authenticated');
     sessionStorage.removeItem('kmita_username');
 
+    // Detener auto-refresh
+    stopAutoRefresh();
+
     // Mostrar pantalla de login
     const loginScreen = document.getElementById('loginScreen');
     if (loginScreen) loginScreen.style.display = 'flex';
@@ -151,41 +155,95 @@ function updateDataSourceStatus(message) {
     const statusElement = document.getElementById('dataSourceStatus');
     if (statusElement) {
         statusElement.textContent = message;
+        console.log('[STATUS]', message);
     }
+
+    // Actualizar indicador de auto-refresh
+    updateAutoRefreshStatus();
 }
 
 // Mostrar ayuda de conexión
 function showConnectionHelp() {
-    const helpHTML = `
-        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 10px 0;">
-            <h4 style="color: #dc2626; margin: 0 0 10px 0;">🔧 Configuración Requerida para CSV Público:</h4>
-            <ol style="margin: 0; padding-left: 20px; color: #374151;">
-                <li><strong>Hacer el documento público:</strong><br>
-                      • Abre tu Google Sheets<br>
-                      • Clic en "Compartir" (botón azul arriba a la derecha)<br>
-                      • Selecciona "Cambiar a cualquier persona con el enlace puede ver"<br>
-                      • Copia el enlace y verifica que se pueda acceder sin login
-                </li>
-                <li><strong>Verificar configuración:</strong><br>
-                      • Asegurarse de que los nombres de las hojas coincidan exactamente<br>
-                      • Verificar que SHEET_ID en config.js sea correcto<br>
-                      • El dashboard usa CSV export público, NO requiere API key
-                </li>
-                <li><strong>Probar conexión:</strong><br>
-                      • Una vez público, haz clic en "Reintentar Conexión"<br>
-                      • Revisa la consola del navegador (F12) para logs detallados
-                </li>
-            </ol>
-            <button onclick="testGoogleSheetsConnection()" style="margin-top: 10px; padding: 8px 15px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                🔄 Reintentar Conexión
-            </button>
-        </div>
-    `;
-
     const container = document.querySelector('.data-source-info');
-    if (container) {
-        container.insertAdjacentHTML('afterend', helpHTML);
-    }
+    if (!container) return;
+
+    // Create the help div
+    const helpDiv = document.createElement('div');
+    helpDiv.style.background = '#fef2f2';
+    helpDiv.style.border = '1px solid #fecaca';
+    helpDiv.style.borderRadius = '8px';
+    helpDiv.style.padding = '15px';
+    helpDiv.style.margin = '10px 0';
+
+    // Create the title
+    const title = document.createElement('h4');
+    title.style.color = '#dc2626';
+    title.style.margin = '0 0 10px 0';
+    title.textContent = '🔧 Configuración Requerida para CSV Público:';
+    helpDiv.appendChild(title);
+
+    // Create the ordered list
+    const ol = document.createElement('ol');
+    ol.style.margin = '0';
+    ol.style.paddingLeft = '20px';
+    ol.style.color = '#374151';
+
+    // First list item
+    const li1 = document.createElement('li');
+    const strong1 = document.createElement('strong');
+    strong1.textContent = 'Hacer el documento público:';
+    li1.appendChild(strong1);
+    li1.appendChild(document.createElement('br'));
+    li1.appendChild(document.createTextNode('• Abre tu Google Sheets'));
+    li1.appendChild(document.createElement('br'));
+    li1.appendChild(document.createTextNode('• Clic en "Compartir" (botón azul arriba a la derecha)'));
+    li1.appendChild(document.createElement('br'));
+    li1.appendChild(document.createTextNode('• Selecciona "Cambiar a cualquier persona con el enlace puede ver"'));
+    li1.appendChild(document.createElement('br'));
+    li1.appendChild(document.createTextNode('• Copia el enlace y verifica que se pueda acceder sin login'));
+    ol.appendChild(li1);
+
+    // Second list item
+    const li2 = document.createElement('li');
+    const strong2 = document.createElement('strong');
+    strong2.textContent = 'Verificar configuración:';
+    li2.appendChild(strong2);
+    li2.appendChild(document.createElement('br'));
+    li2.appendChild(document.createTextNode('• Asegurarse de que los nombres de las hojas coincidan exactamente'));
+    li2.appendChild(document.createElement('br'));
+    li2.appendChild(document.createTextNode('• Verificar que SHEET_ID en config.js sea correcto'));
+    li2.appendChild(document.createElement('br'));
+    li2.appendChild(document.createTextNode('• El dashboard usa CSV export público, NO requiere API key'));
+    ol.appendChild(li2);
+
+    // Third list item
+    const li3 = document.createElement('li');
+    const strong3 = document.createElement('strong');
+    strong3.textContent = 'Probar conexión:';
+    li3.appendChild(strong3);
+    li3.appendChild(document.createElement('br'));
+    li3.appendChild(document.createTextNode('• Una vez público, haz clic en "Reintentar Conexión"'));
+    li3.appendChild(document.createElement('br'));
+    li3.appendChild(document.createTextNode('• Revisa la consola del navegador (F12) para logs detallados'));
+    ol.appendChild(li3);
+
+    helpDiv.appendChild(ol);
+
+    // Create the button
+    const button = document.createElement('button');
+    button.style.marginTop = '10px';
+    button.style.padding = '8px 15px';
+    button.style.background = '#3b82f6';
+    button.style.color = 'white';
+    button.style.border = 'none';
+    button.style.borderRadius = '4px';
+    button.style.cursor = 'pointer';
+    button.textContent = '🔄 Reintentar Conexión';
+    button.addEventListener('click', testGoogleSheetsConnection);
+    helpDiv.appendChild(button);
+
+    // Insert after the container
+    container.insertAdjacentElement('afterend', helpDiv);
 }
 
 // Función para probar la conexión a Google Sheets
@@ -297,10 +355,22 @@ async function loadShopifyData() {
         // Procesar datos
         processAndDisplayData();
 
+        // Iniciar auto-refresh si está habilitado
+        if (DATA_CONFIG.AUTO_REFRESH_ENABLED) {
+            startAutoRefresh();
+            // Mostrar indicador de auto-refresh configurado
+            const autoRefreshElement = document.getElementById('autoRefreshStatus');
+            if (autoRefreshElement) {
+                const hours = DATA_CONFIG.REFRESH_INTERVAL / 1000 / 60 / 60;
+                autoRefreshElement.textContent = `🔄 Auto-refresh: Activo (${hours}h)`;
+                autoRefreshElement.style.display = 'block';
+            }
+        }
+
     } catch (error) {
         console.error('Error cargando datos K-mita:', error);
         console.log('[FALLBACK] Intentando cargar datos de muestra...');
-        
+
         try {
             await loadSampleData();
         } catch (fallbackError) {
@@ -649,6 +719,9 @@ function generateKmitaCharts() {
     const filteredOrders = filterDataByPeriod(ordersData);
 
     try {
+        // Destruir gráficas existentes antes de crear nuevas
+        destroyExistingCharts();
+
         generateSalesTrendChart(filteredOrders);
         generateCustomerSegmentChart(filteredOrders);
         generateTopProductsChart(filteredOrders);
@@ -675,7 +748,7 @@ function generateSalesTrendChart(ordersData) {
     const ctx = document.getElementById('salesTrendChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.salesTrendChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: monthlyData.map(d => d.month),
@@ -722,7 +795,7 @@ function generateCustomerSegmentChart(ordersData) {
     const ctx = document.getElementById('customerSegmentChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.customerSegmentChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: Object.keys(segments),
@@ -750,7 +823,7 @@ function generateTopProductsChart(ordersData) {
     const ctx = document.getElementById('topProductsChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.topProductsChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: topProducts.map(p => `${p.kilos}kg`),
@@ -793,7 +866,7 @@ function generateGeographicChart(ordersData) {
     const ctx = document.getElementById('geographicChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.geographicChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: sortedStates.map(([state]) => state),
@@ -838,7 +911,7 @@ function generatePaymentMethodsChart(ordersData) {
     const ctx = document.getElementById('paymentMethodsChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.paymentMethodsChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: Object.keys(paymentMethods),
@@ -866,7 +939,7 @@ function generateFulfillmentChart(ordersData) {
     const ctx = document.getElementById('fulfillmentChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.fulfillmentChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: monthlyData.map(d => d.month),
@@ -917,7 +990,7 @@ function generateMarketingPerformanceChart(ordersData) {
     const ctx = document.getElementById('marketingPerformanceChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.marketingPerformanceChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: ['Acepta Marketing', 'No Acepta Marketing'],
@@ -969,7 +1042,7 @@ function generateDiscountChart(ordersData) {
     const ctx = document.getElementById('discountChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.discountChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: Object.keys(discountRanges),
@@ -1003,7 +1076,7 @@ function generateKilosChart(ordersData) {
     const ctx = document.getElementById('kilosChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.kilosChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: monthlyData.map(d => d.month),
@@ -1044,7 +1117,7 @@ function generateBagsChart(ordersData) {
     const ctx = document.getElementById('bagsChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.bagsChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: monthlyData.map(d => d.month),
@@ -1094,7 +1167,7 @@ function generateSalesByStateChart(ordersData) {
     const ctx = document.getElementById('salesByStateChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.salesByStateChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: sortedStates.map(([state]) => state),
@@ -1139,7 +1212,7 @@ function generateStatesChart(ordersData) {
     const ctx = document.getElementById('statesChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    chartInstances.statesChart = new Chart(ctx, {
         type: 'pie',
         data: {
             labels: Object.keys(stateSales),
@@ -1199,14 +1272,31 @@ function populateTopCustomersTable(ordersData) {
 
     customers.forEach((customer, index) => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${customer.email}</td>
-            <td>${customer.totalOrders}</td>
-            <td>${formatCurrency(customer.totalSpent)}</td>
-            <td>${formatCurrency(customer.avgOrderValue)}</td>
-            <td>${customer.segment}</td>
-            <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
-        `;
+
+        const emailCell = document.createElement('td');
+        emailCell.textContent = customer.email;
+        row.appendChild(emailCell);
+
+        const ordersCell = document.createElement('td');
+        ordersCell.textContent = customer.totalOrders;
+        row.appendChild(ordersCell);
+
+        const spentCell = document.createElement('td');
+        spentCell.textContent = formatCurrency(customer.totalSpent);
+        row.appendChild(spentCell);
+
+        const avgCell = document.createElement('td');
+        avgCell.textContent = formatCurrency(customer.avgOrderValue);
+        row.appendChild(avgCell);
+
+        const segmentCell = document.createElement('td');
+        segmentCell.textContent = customer.segment;
+        row.appendChild(segmentCell);
+
+        const lastOrderCell = document.createElement('td');
+        lastOrderCell.textContent = customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A';
+        row.appendChild(lastOrderCell);
+
         tbody.appendChild(row);
     });
 }
@@ -1222,15 +1312,35 @@ function populateMonthlyAnalysisTable(ordersData) {
 
     monthlyData.forEach(data => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${data.month}</td>
-            <td>${data.orders}</td>
-            <td>${formatCurrency(data.revenue)}</td>
-            <td>${data.customers}</td>
-            <td>${formatCurrency(data.avgOrderValue)}</td>
-            <td>${data.kilos.toLocaleString()} kg</td>
-            <td>${data.avgFulfillmentDays.toFixed(1)} días</td>
-        `;
+
+        const monthCell = document.createElement('td');
+        monthCell.textContent = data.month;
+        row.appendChild(monthCell);
+
+        const ordersCell = document.createElement('td');
+        ordersCell.textContent = data.orders;
+        row.appendChild(ordersCell);
+
+        const revenueCell = document.createElement('td');
+        revenueCell.textContent = formatCurrency(data.revenue);
+        row.appendChild(revenueCell);
+
+        const customersCell = document.createElement('td');
+        customersCell.textContent = data.customers;
+        row.appendChild(customersCell);
+
+        const avgCell = document.createElement('td');
+        avgCell.textContent = formatCurrency(data.avgOrderValue);
+        row.appendChild(avgCell);
+
+        const kilosCell = document.createElement('td');
+        kilosCell.textContent = data.kilos.toLocaleString() + ' kg';
+        row.appendChild(kilosCell);
+
+        const fulfillmentCell = document.createElement('td');
+        fulfillmentCell.textContent = data.avgFulfillmentDays.toFixed(1) + ' días';
+        row.appendChild(fulfillmentCell);
+
         tbody.appendChild(row);
     });
 }
@@ -1247,19 +1357,51 @@ function populateCustomersAnalysisTable(ordersData) {
 
     customers.forEach(customer => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${customer.email}</td>
-            <td>${customer.totalOrders}</td>
-            <td>${formatCurrency(customer.totalSpent)}</td>
-            <td>${customer.totalKilos.toFixed(1)} kg</td>
-            <td>${customer.totalBags}</td>
-            <td>${formatCurrency(customer.avgPricePerKilo)}</td>
-            <td>${customer.totalBags > 0 ? formatCurrency(customer.totalSpent / customer.totalBags) : '$0'}</td>
-            <td>${customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A'}</td>
-            <td>${customer.daysSinceLastOrder || 'N/A'}</td>
-            <td>${customer.primaryState}</td>
-            <td>${customer.segment}</td>
-        `;
+
+        const emailCell = document.createElement('td');
+        emailCell.textContent = customer.email;
+        row.appendChild(emailCell);
+
+        const ordersCell = document.createElement('td');
+        ordersCell.textContent = customer.totalOrders;
+        row.appendChild(ordersCell);
+
+        const spentCell = document.createElement('td');
+        spentCell.textContent = formatCurrency(customer.totalSpent);
+        row.appendChild(spentCell);
+
+        const kilosCell = document.createElement('td');
+        kilosCell.textContent = customer.totalKilos.toFixed(1) + ' kg';
+        row.appendChild(kilosCell);
+
+        const bagsCell = document.createElement('td');
+        bagsCell.textContent = customer.totalBags;
+        row.appendChild(bagsCell);
+
+        const avgKiloCell = document.createElement('td');
+        avgKiloCell.textContent = formatCurrency(customer.avgPricePerKilo);
+        row.appendChild(avgKiloCell);
+
+        const avgBagCell = document.createElement('td');
+        avgBagCell.textContent = customer.totalBags > 0 ? formatCurrency(customer.totalSpent / customer.totalBags) : '$0';
+        row.appendChild(avgBagCell);
+
+        const lastOrderCell = document.createElement('td');
+        lastOrderCell.textContent = customer.lastOrder ? customer.lastOrder.toLocaleDateString('es-MX') : 'N/A';
+        row.appendChild(lastOrderCell);
+
+        const daysCell = document.createElement('td');
+        daysCell.textContent = customer.daysSinceLastOrder || 'N/A';
+        row.appendChild(daysCell);
+
+        const stateCell = document.createElement('td');
+        stateCell.textContent = customer.primaryState;
+        row.appendChild(stateCell);
+
+        const segmentCell = document.createElement('td');
+        segmentCell.textContent = customer.segment;
+        row.appendChild(segmentCell);
+
         tbody.appendChild(row);
     });
 }
@@ -1283,23 +1425,67 @@ function populateOrdersAnalysisTable(ordersData) {
         const pricePerKilo = kilos > 0 ? total / kilos : 0;
 
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${order.order_number || order.id || 'N/A'}</td>
-            <td>${order.customer_email || 'N/A'}</td>
-            <td>${!isNaN(createdDate.getTime()) ? createdDate.toLocaleDateString('es-MX') : 'N/A'}</td>
-            <td>${!isNaN(processedDate.getTime()) ? processedDate.toLocaleDateString('es-MX') : 'N/A'}</td>
-            <td>${fulfillmentDays !== null ? `${fulfillmentDays} días` : 'N/A'}</td>
-            <td>${formatCurrency(total)}</td>
-            <td>${formatCurrency(discount)}</td>
-            <td>${discountPercent}%</td>
-            <td>${kilos.toFixed(1)} kg</td>
-            <td>${bags}</td>
-            <td>${formatCurrency(pricePerKilo)}</td>
-            <td>${order.shipping_city || 'N/A'}</td>
-            <td>${order.shipping_province || 'N/A'}</td>
-            <td>${order.payment_method || 'N/A'}</td>
-            <td>${order.accepts_marketing === true || order.accepts_marketing === 'true' ? 'Sí' : 'No'}</td>
-        `;
+
+        const orderCell = document.createElement('td');
+        orderCell.textContent = order.order_number || order.id || 'N/A';
+        row.appendChild(orderCell);
+
+        const emailCell = document.createElement('td');
+        emailCell.textContent = order.customer_email || 'N/A';
+        row.appendChild(emailCell);
+
+        const createdCell = document.createElement('td');
+        createdCell.textContent = !isNaN(createdDate.getTime()) ? createdDate.toLocaleDateString('es-MX') : 'N/A';
+        row.appendChild(createdCell);
+
+        const processedCell = document.createElement('td');
+        processedCell.textContent = !isNaN(processedDate.getTime()) ? processedDate.toLocaleDateString('es-MX') : 'N/A';
+        row.appendChild(processedCell);
+
+        const fulfillmentCell = document.createElement('td');
+        fulfillmentCell.textContent = fulfillmentDays !== null ? `${fulfillmentDays} días` : 'N/A';
+        row.appendChild(fulfillmentCell);
+
+        const totalCell = document.createElement('td');
+        totalCell.textContent = formatCurrency(total);
+        row.appendChild(totalCell);
+
+        const discountCell = document.createElement('td');
+        discountCell.textContent = formatCurrency(discount);
+        row.appendChild(discountCell);
+
+        const percentCell = document.createElement('td');
+        percentCell.textContent = discountPercent + '%';
+        row.appendChild(percentCell);
+
+        const kilosCell = document.createElement('td');
+        kilosCell.textContent = kilos.toFixed(1) + ' kg';
+        row.appendChild(kilosCell);
+
+        const bagsCell = document.createElement('td');
+        bagsCell.textContent = bags;
+        row.appendChild(bagsCell);
+
+        const priceCell = document.createElement('td');
+        priceCell.textContent = formatCurrency(pricePerKilo);
+        row.appendChild(priceCell);
+
+        const cityCell = document.createElement('td');
+        cityCell.textContent = order.shipping_city || 'N/A';
+        row.appendChild(cityCell);
+
+        const provinceCell = document.createElement('td');
+        provinceCell.textContent = order.shipping_province || 'N/A';
+        row.appendChild(provinceCell);
+
+        const paymentCell = document.createElement('td');
+        paymentCell.textContent = order.payment_method || 'N/A';
+        row.appendChild(paymentCell);
+
+        const marketingCell = document.createElement('td');
+        marketingCell.textContent = order.accepts_marketing === true || order.accepts_marketing === 'true' ? 'Sí' : 'No';
+        row.appendChild(marketingCell);
+
         tbody.appendChild(row);
     });
 }
@@ -1316,16 +1502,39 @@ function populateDetailedAnalysisTable(ordersData) {
         const fulfillmentDays = calculateFulfillmentDays(order.created_at, order.processed_at || order.fulfillment_created_at);
 
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${order.order_number || order.id || 'N/A'}</td>
-            <td>${order.shipping_city || 'N/A'}</td>
-            <td>${order.shipping_province || 'N/A'}</td>
-            <td>${order.payment_method || 'N/A'}</td>
-            <td>${!isNaN(processedDate.getTime()) ? processedDate.toLocaleDateString('es-MX') : 'N/A'}</td>
-            <td>${fulfillmentDays !== null ? `${fulfillmentDays} días` : 'N/A'}</td>
-            <td>${formatCurrency(parseFloat(order.total_price || 0))}</td>
-            <td>${parseFloat(order.total_kilos || 0).toFixed(1)} kg</td>
-        `;
+
+        const orderCell = document.createElement('td');
+        orderCell.textContent = order.order_number || order.id || 'N/A';
+        row.appendChild(orderCell);
+
+        const cityCell = document.createElement('td');
+        cityCell.textContent = order.shipping_city || 'N/A';
+        row.appendChild(cityCell);
+
+        const provinceCell = document.createElement('td');
+        provinceCell.textContent = order.shipping_province || 'N/A';
+        row.appendChild(provinceCell);
+
+        const paymentCell = document.createElement('td');
+        paymentCell.textContent = order.payment_method || 'N/A';
+        row.appendChild(paymentCell);
+
+        const processedCell = document.createElement('td');
+        processedCell.textContent = !isNaN(processedDate.getTime()) ? processedDate.toLocaleDateString('es-MX') : 'N/A';
+        row.appendChild(processedCell);
+
+        const fulfillmentCell = document.createElement('td');
+        fulfillmentCell.textContent = fulfillmentDays !== null ? `${fulfillmentDays} días` : 'N/A';
+        row.appendChild(fulfillmentCell);
+
+        const totalCell = document.createElement('td');
+        totalCell.textContent = formatCurrency(parseFloat(order.total_price || 0));
+        row.appendChild(totalCell);
+
+        const kilosCell = document.createElement('td');
+        kilosCell.textContent = parseFloat(order.total_kilos || 0).toFixed(1) + ' kg';
+        row.appendChild(kilosCell);
+
         tbody.appendChild(row);
     });
 }
@@ -1364,12 +1573,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const refreshBtn = document.getElementById('refreshData');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
-            if (isAuthenticated) loadShopifyData();
+            if (isAuthenticated) {
+                // Detener auto-refresh temporalmente durante refresh manual
+                stopAutoRefresh();
+                loadShopifyData().then(() => {
+                    // Reiniciar auto-refresh después del refresh manual
+                    if (DATA_CONFIG.AUTO_REFRESH_ENABLED) {
+                        startAutoRefresh();
+                    }
+                });
+            }
         });
     }
 
     // Configurar filtros de período
     setupPeriodFilters();
+
+    // Configurar botón de informe mensual
+    const monthlyReportBtn = document.getElementById('monthlyReportBtn');
+    if (monthlyReportBtn) {
+        monthlyReportBtn.addEventListener('click', () => {
+            window.location.href = 'informe-mensual.html';
+        });
+    }
 
     console.log('[INIT] Event listeners configurados');
 });
@@ -1676,7 +1902,17 @@ function generateCustomerAlerts() {
         `;
     }
 
-    alertsContainer.innerHTML = alertsHTML;
+    // Clear existing content
+    alertsContainer.innerHTML = '';
+
+    // Create and append the alerts HTML using DOM methods
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = alertsHTML;
+
+    // Move all children from tempDiv to alertsContainer
+    while (tempDiv.firstChild) {
+        alertsContainer.appendChild(tempDiv.firstChild);
+    }
 }
 
 // Funciones para mostrar/ocultar todas las listas de clientes
@@ -1826,15 +2062,29 @@ function displayInsights(insights) {
     if (!container) return;
 
     if (insights.length === 0) {
-        container.innerHTML = `
-            <div class="insight-card info">
-                <div class="insight-icon">💡</div>
-                <div class="insight-content">
-                    <h4>Procesando Insights</h4>
-                    <p>Los insights se generarán cuando haya más datos disponibles</p>
-                </div>
-            </div>
-        `;
+        container.innerHTML = '';
+
+        const infoCard = document.createElement('div');
+        infoCard.className = 'insight-card info';
+
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'insight-icon';
+        iconDiv.textContent = '💡';
+        infoCard.appendChild(iconDiv);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'insight-content';
+
+        const title = document.createElement('h4');
+        title.textContent = 'Procesando Insights';
+        contentDiv.appendChild(title);
+
+        const message = document.createElement('p');
+        message.textContent = 'Los insights se generarán cuando haya más datos disponibles';
+        contentDiv.appendChild(message);
+
+        infoCard.appendChild(contentDiv);
+        container.appendChild(infoCard);
         return;
     }
 
@@ -1843,13 +2093,24 @@ function displayInsights(insights) {
     insights.forEach(insight => {
         const insightCard = document.createElement('div');
         insightCard.className = `insight-card ${insight.type}`;
-        insightCard.innerHTML = `
-            <div class="insight-icon">${insight.icon}</div>
-            <div class="insight-content">
-                <h4>${insight.title}</h4>
-                <p>${insight.message}</p>
-            </div>
-        `;
+
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'insight-icon';
+        iconDiv.textContent = insight.icon;
+        insightCard.appendChild(iconDiv);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'insight-content';
+
+        const title = document.createElement('h4');
+        title.textContent = insight.title;
+        contentDiv.appendChild(title);
+
+        const message = document.createElement('p');
+        message.textContent = insight.message;
+        contentDiv.appendChild(message);
+
+        insightCard.appendChild(contentDiv);
         container.appendChild(insightCard);
     });
 }
@@ -1860,6 +2121,99 @@ function generateKmitaInsights() {
     const insights = generateBusinessInsights();
     displayInsights(insights);
     generateCustomerAlerts();
+}
+
+// ===========================================
+// FUNCIONES DE GESTIÓN DE GRÁFICAS
+// ===========================================
+
+// Variable global para almacenar instancias de gráficas
+let chartInstances = {};
+
+// Función para destruir gráficas existentes
+function destroyExistingCharts() {
+    Object.values(chartInstances).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') {
+            chart.destroy();
+        }
+    });
+    chartInstances = {};
+}
+
+// ===========================================
+// FUNCIONES DE AUTO-REFRESH
+// ===========================================
+
+// Función para iniciar auto-refresh
+function startAutoRefresh() {
+    // Detener cualquier intervalo existente
+    stopAutoRefresh();
+
+    const hours = DATA_CONFIG.REFRESH_INTERVAL / 1000 / 60 / 60;
+    console.log(`[AUTO-REFRESH] Iniciando auto-refresh cada ${hours} horas`);
+
+    autoRefreshInterval = setInterval(async () => {
+        console.log('[AUTO-REFRESH] Ejecutando refresh automático...');
+
+        try {
+            // Verificar si el usuario está autenticado
+            if (!isAuthenticated) {
+                console.log('[AUTO-REFRESH] Usuario no autenticado, deteniendo auto-refresh');
+                stopAutoRefresh();
+                return;
+            }
+
+            // Mostrar que está ejecutando auto-refresh
+            updateDataSourceStatus('🔄 Auto-refresh: Actualizando datos...');
+
+            // Actualizar datos
+            await loadShopifyData();
+
+            console.log('[AUTO-REFRESH] Refresh automático completado exitosamente');
+        } catch (error) {
+            console.error('[AUTO-REFRESH] Error en refresh automático:', error);
+            updateDataSourceStatus('❌ Error en auto-refresh');
+        }
+    }, DATA_CONFIG.REFRESH_INTERVAL);
+
+    // Actualizar estado inmediatamente
+    updateAutoRefreshStatus();
+}
+
+// Función para detener auto-refresh
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        console.log('[AUTO-REFRESH] Auto-refresh detenido');
+        updateAutoRefreshStatus();
+    }
+}
+
+// Función para actualizar el indicador de estado del auto-refresh
+function updateAutoRefreshStatus() {
+    const statusElement = document.getElementById('dataSourceStatus');
+    if (!statusElement) return;
+
+    let statusMessage = statusElement.textContent || '';
+
+    if (autoRefreshInterval) {
+        const hours = DATA_CONFIG.REFRESH_INTERVAL / 1000 / 60 / 60;
+        statusMessage += ` 🔄 Auto-refresh: Activo (${hours}h)`;
+    } else {
+        statusMessage += ' ⏸️ Auto-refresh: Inactivo';
+    }
+
+    statusElement.textContent = statusMessage;
+}
+
+// Función para obtener tiempo restante hasta próximo refresh
+function getTimeUntilNextRefresh() {
+    if (!autoRefreshInterval) return null;
+
+    // Esta función requiere más complejidad para calcular tiempo restante
+    // Por simplicidad, devolveremos el intervalo configurado
+    return DATA_CONFIG.REFRESH_INTERVAL;
 }
 
 console.log('✅ Script K-mita Analytics cargado correctamente');

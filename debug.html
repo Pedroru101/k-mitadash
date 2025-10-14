@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Botón Informe Mensual</title>
+    <link rel="stylesheet" href="shopify-analytics-styles.css">
+</head>
+<body>
+    <div style="padding: 2rem;">
+        <h1>Debug - Botones de Período</h1>
+        
+        <div class="period-filters">
+            <button class="period-btn active" data-period="all">Todo el tiempo</button>
+            <button class="period-btn" data-period="12m">Últimos 12 meses</button>
+            <button class="period-btn" data-period="6m">Últimos 6 meses</button>
+            <button class="period-btn" data-period="3m">Últimos 3 meses</button>
+            <button class="period-btn" data-period="1m">Último mes</button>
+            <button class="period-btn" id="monthlyReportBtn">INFORME MENSUAL</button>
+        </div>
+        
+        <script>
+            console.log('Botón encontrado:', document.getElementById('monthlyReportBtn'));
+            console.log('Todos los botones:', document.querySelectorAll('.period-btn'));
+        </script>
+    </div>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe Mensual - K-mita Analytics</title>
+    <script src="config.js"></script>
+    <link rel="stylesheet" href="shopify-analytics-styles.css">
+    <link rel="icon" type="image/x-icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐈</text></svg>">
+</head>
+
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>🐈 K-mita Analytics</h1>
+                <p class="text-center text-gray-600 dark:text-gray-400 mb-8">Dashboard Profesional de Análisis
+                    VERSION:DEMO</p>
+            </div>
+            <form id="loginForm" class="space-y-6">
+                <div class="space-y-2">
+                    <label for="username"
+                        class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Usuario</label>
+                    <input type="text" id="username" class="k-input w-full" placeholder="Ingresa tu usuario" required>
+                </div>
+                <div class="space-y-2">
+                    <label for="password"
+                        class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Contraseña</label>
+                    <input type="password" id="password" class="k-input w-full" placeholder="Ingresa tu contraseña"
+                        required>
+                </div>
+                <div id="loginError" class="login-error hidden"></div>
+                <button type="submit" class="login-btn">
+                    <span class="flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                        Iniciar Sesión
+                    </span>
+                </button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    © 2025 K-mita Analytics. Todos los derechos reservados.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Report Dashboard -->
+    <div id="dashboardContainer" class="hidden">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="dashboard-title">🐈 K-mita Analytics - Informe Mensual</h1>
+                    <div id="dataSourceStatus" class="data-source-status">Cargando datos...</div>
+                </div>
+                <div class="header-actions">
+                    <button id="backToDashboard" class="k-btn k-btn-secondary">← Volver al Dashboard</button>
+                    <button id="logoutBtn" class="k-btn k-btn-secondary">🚪 Salir</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Monthly Report Message -->
+            <section class="report-section">
+                <div class="report-card">
+                    <h2 class="section-title">📊 Solicitud de Informe Mensual</h2>
+                    <div class="report-content">
+                        <div class="message-box">
+                            <p class="report-message">
+                                "Nos podrias enviar reporte de los volumenes en bolsas y kilos por tipo de presentacion por cada mes de este año 2025 por destino por favor con totales mensuales y totales anuales."
+                            </p>
+                        </div>
+                        <div class="report-info">
+                            <p class="info-text">
+                                Este informe mensual proporciona un análisis detallado de los volúmenes de ventas,
+                                incluyendo bolsas y kilos por tipo de presentación, organizados por mes y destino
+                                para el año 2025. Incluye totales mensuales y anuales acumulados.
+                            </p>
+                        </div>
+                        <div class="report-actions">
+                            <button id="generateReportBtn" class="k-btn k-btn-primary">
+                                📈 Generar Informe Mensual
+                            </button>
+                            <button id="exportReportBtn" class="k-btn k-btn-secondary">
+                                📥 Exportar Datos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Report Preview Section -->
+            <section class="report-preview-section">
+                <h2 class="section-title">📋 Vista Previa del Informe</h2>
+                <div class="report-preview">
+                    <div class="preview-placeholder">
+                        <div class="placeholder-icon">📊</div>
+                        <h3>Informe Mensual 2025</h3>
+                        <p>Haz clic en "Generar Informe Mensual" para ver los datos detallados</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="monthly-report-script.js"></script>
+</body>
+
+</html>
