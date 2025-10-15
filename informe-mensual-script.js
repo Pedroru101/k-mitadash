@@ -5,34 +5,34 @@
 // Variable global para el mes seleccionado
 let selectedMonth = 10; // Octubre por defecto
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('[INFORME MENSUAL] Inicializando...');
-    
+
     // Elementos del DOM
     const backBtn = document.getElementById('backBtn');
     const generateReportBtn = document.getElementById('generateReportBtn');
     const exportReportBtn = document.getElementById('exportReportBtn');
     const reportContent = document.getElementById('reportContent');
     const reportPlaceholder = document.getElementById('reportPlaceholder');
-    
+
     // Event Listeners
     if (backBtn) {
         backBtn.addEventListener('click', () => {
-            window.location.href = 'index.html';
+            window.location.href = 'shopify-analytics-dashboard.html';
         });
     }
-    
+
     if (generateReportBtn) {
         generateReportBtn.addEventListener('click', generateMonthlyReport);
     }
-    
+
     if (exportReportBtn) {
         exportReportBtn.addEventListener('click', exportReport);
     }
-    
+
     // Configurar filtros de mes
     setupMonthFilters();
-    
+
     console.log('[INFORME MENSUAL] Inicialización completada');
 });
 
@@ -40,28 +40,28 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupMonthFilters() {
     const monthButtons = document.querySelectorAll('.month-btn:not(.disabled)');
     const selectedMonthText = document.getElementById('selectedMonthText');
-    
+
     monthButtons.forEach(button => {
         button.addEventListener('click', () => {
             // Remover clase active de todos los botones
             monthButtons.forEach(btn => btn.classList.remove('active'));
-            
+
             // Agregar clase active al botón clickeado
             button.classList.add('active');
-            
+
             // Actualizar mes seleccionado
             selectedMonth = parseInt(button.dataset.month);
-            
+
             // Actualizar texto del mes seleccionado
             const monthNames = [
                 '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
             ];
-            
+
             if (selectedMonthText) {
                 selectedMonthText.innerHTML = `Mes seleccionado: <strong>${monthNames[selectedMonth]} 2025</strong>`;
             }
-            
+
             console.log(`[FILTRO MES] Mes seleccionado: ${monthNames[selectedMonth]} (${selectedMonth})`);
         });
     });
@@ -70,15 +70,15 @@ function setupMonthFilters() {
 // Función para generar el informe mensual
 function generateMonthlyReport() {
     console.log(`[INFORME MENSUAL] Generando reporte para mes ${selectedMonth}...`);
-    
+
     // Mostrar contenido del reporte
     const reportContent = document.getElementById('reportContent');
-    
+
     if (reportContent) reportContent.classList.remove('hidden');
-    
+
     // Generar datos del reporte para el mes seleccionado
     const reportData = generateReportData(selectedMonth);
-    
+
     // Mostrar el reporte
     displayReport(reportData);
 }
@@ -89,7 +89,7 @@ function generateReportData(monthNumber) {
         '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
-    
+
     const presentaciones = [
         'Arena Biodegradable 3kg',
         'Arena Biodegradable 6kg',
@@ -97,7 +97,7 @@ function generateReportData(monthNumber) {
         'Arena Biodegradable 20kg',
         'Arena Biodegradable 30kg'
     ];
-    
+
     const destinos = [
         'Ciudad de México',
         'Jalisco',
@@ -105,7 +105,7 @@ function generateReportData(monthNumber) {
         'Puebla',
         'Veracruz'
     ];
-    
+
     // Generar datos para el mes seleccionado
     const mesData = {
         nombre: meses[monthNumber],
@@ -116,7 +116,7 @@ function generateReportData(monthNumber) {
             kilos: 0
         }
     };
-    
+
     // Generar datos por destino
     destinos.forEach(destino => {
         const destinoData = {
@@ -127,7 +127,7 @@ function generateReportData(monthNumber) {
                 kilos: 0
             }
         };
-        
+
         // Generar datos por presentación
         presentaciones.forEach(presentacion => {
             // Generar datos más realistas basados en el mes
@@ -136,28 +136,28 @@ function generateReportData(monthNumber) {
             const bolsas = Math.floor(baseAmount * seasonalFactor);
             const pesoUnitario = parseInt(presentacion.match(/\d+/)[0]);
             const kilos = bolsas * pesoUnitario;
-            
+
             destinoData.presentaciones.push({
                 nombre: presentacion,
                 bolsas: bolsas,
                 kilos: kilos
             });
-            
+
             destinoData.totalesDestino.bolsas += bolsas;
             destinoData.totalesDestino.kilos += kilos;
         });
-        
+
         mesData.destinos.push(destinoData);
         mesData.totalesMes.bolsas += destinoData.totalesDestino.bolsas;
         mesData.totalesMes.kilos += destinoData.totalesDestino.kilos;
     });
-    
+
     const reportData = {
         año: 2025,
         mesSeleccionado: mesData,
         totalesMes: mesData.totalesMes
     };
-    
+
     return reportData;
 }
 
@@ -165,7 +165,7 @@ function generateReportData(monthNumber) {
 function displayReport(data) {
     const reportContent = document.getElementById('reportContent');
     const mes = data.mesSeleccionado;
-    
+
     let html = `
         <div class="monthly-report">
             <h2>📊 Reporte de Volúmenes - ${mes.nombre} ${data.año}</h2>
@@ -202,7 +202,7 @@ function displayReport(data) {
                         </thead>
                         <tbody>
     `;
-    
+
     // Generar tabla para el mes seleccionado
     mes.destinos.forEach(destino => {
         destino.presentaciones.forEach((presentacion, index) => {
@@ -215,7 +215,7 @@ function displayReport(data) {
                 </tr>
             `;
         });
-        
+
         // Fila de totales por destino
         html += `
             <tr class="subtotal-row">
@@ -225,7 +225,7 @@ function displayReport(data) {
             </tr>
         `;
     });
-    
+
     html += `
                         </tbody>
                     </table>
@@ -233,7 +233,7 @@ function displayReport(data) {
             </div>
         </div>
     `;
-    
+
     reportContent.innerHTML = html;
 }
 

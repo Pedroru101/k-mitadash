@@ -6,7 +6,7 @@ import os
 from threading import Timer
 
 # Configuración del servidor
-PORT = 3001
+PORT = 8080
 DIRECTORY = "."
 
 class Handler(http.server.SimpleHTTPRequestHandler):

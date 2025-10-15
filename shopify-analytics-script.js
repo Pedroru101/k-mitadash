@@ -2217,3 +2217,19 @@ function getTimeUntilNextRefresh() {
 }
 
 console.log('✅ Script K-mita Analytics cargado correctamente');
+
+// ===========================================
+// NAVEGACIÓN A INFORME MENSUAL
+// ===========================================
+
+// Agregar event listener para el botón de informe mensual
+document.addEventListener('DOMContentLoaded', function() {
+    const monthlyReportBtn = document.getElementById('monthlyReportBtn');
+    
+    if (monthlyReportBtn) {
+        monthlyReportBtn.addEventListener('click', function() {
+            console.log('[NAVIGATION] Navegando a informe mensual');
+            window.location.href = 'informe-mensual.html';
+        });
+    }
+});

@@ -1,0 +1,3 @@
+@echo off
+echo Abriendo K-mita Analytics Dashboard...
+start http://localhost:8000/shopify-analytics-dashboard.html
