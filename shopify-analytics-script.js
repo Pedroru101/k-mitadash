@@ -306,9 +306,9 @@ async function loadShopifyData() {
     updateDataSourceStatus('🔄 Cargando datos de K-mita desde Google Sheets...');
 
     try {
-        // Cargar datos de las dos hojas principales
-        const ordersURL = buildSheetURL(GOOGLE_SHEETS_CONFIG.ORDERS_SHEET);
-        const customersURL = buildSheetURL(GOOGLE_SHEETS_CONFIG.CUSTOMERS_SHEET);
+        // Usar URLs publicadas si están disponibles, sino usar export directo
+        const ordersURL = GOOGLE_SHEETS_CONFIG.PUBLISHED_ORDERS_URL || buildSheetURL(GOOGLE_SHEETS_CONFIG.ORDERS_SHEET);
+        const customersURL = GOOGLE_SHEETS_CONFIG.PUBLISHED_CUSTOMERS_URL || buildSheetURL(GOOGLE_SHEETS_CONFIG.CUSTOMERS_SHEET);
 
         console.log('[DEBUG] URLs a fetch:', { ordersURL, customersURL });
 

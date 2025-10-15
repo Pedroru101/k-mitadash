@@ -20,10 +20,13 @@ const CONFIG = {
     // │ 📊 CONFIGURACIÓN DE GOOGLE SHEETS                                          │
     // └─────────────────────────────────────────────────────────────────────────────┘
     GOOGLE_SHEETS: {
-        SHEET_ID: '1BrEpAFNBYeW-N36_nvlyVivWsrkirTGpTuHy7AnCMi0',
+        SHEET_ID: '1fWJxqNKv7Fm0uldTh7RhxwgVXpdWnp7dR4HsXn8bfZ0',
         API_KEY: 'AIzaSyA2V6oAVFW14tUfAPay-57QgA9dwZWHhAE',
-        ORDERS_SHEET: 'Monthly_Analysis - Orders_Data',
-        CUSTOMERS_SHEET: 'Monthly_Analysis - Customers_Data'
+        ORDERS_SHEET: 'Orders_Data',
+        CUSTOMERS_SHEET: 'Customers_Data',
+        // URLs publicadas directamente (cuando están disponibles)
+        PUBLISHED_ORDERS_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScm_4QAHxyMkGUDkH_j-YkQNFLyrGz7RDrkZKL1HPJLGceBeptGsrH5eFdJgru7pJufp6pWslTIeKs/pub?output=csv',
+        PUBLISHED_CUSTOMERS_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScm_4QAHxyMkGUDkH_j-YkQNFLyrGz7RDrkZKL1HPJLGceBeptGsrH5eFdJgru7pJufp6pWslTIeKs/pub?gid=1773573807&output=csv'
     },
     
     // ┌─────────────────────────────────────────────────────────────────────────────┐
