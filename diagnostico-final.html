@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico Final - K-mita</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .test {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .warning { border-left-color: #ffc107; background: #fff3cd; }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #0056b3; }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico Final - ¿Por qué sigue mostrando 10 órdenes?</h1>
+        
+        <button onclick="runAllTests()">🚀 Ejecutar Todos los Tests</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const SHEET_ID = '1fWJxqNKv7Fm0uldTh7RhxwgVXpdWnp7dR4HsXn8bfZ0';
+        
+        async function runAllTests() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>Ejecutando tests...</h2>';
+            
+            let html = '';
+            
+            // Test 1: Verificar sample-data.json
+            html += '<div class="test">';
+            html += '<h3>Test 1: Verificar sample-data.json en servidor</h3>';
+            try {
+                const response = await fetch('/sample-data.json');
+                const data = await response.json();
+                const ordersCount = data.orders ? data.orders.length : 0;
+                
+                if (ordersCount === 0) {
+                    html += '<div class="result success">✅ sample-data.json está VACÍO (correcto)</div>';
+                } else {
+                    html += `<div class="result error">❌ sample-data.json tiene ${ordersCount} órdenes (debería estar vacío)</div>`;
+                }
+                html += `<pre>${JSON.stringify(data, null, 2).substring(0, 500)}...</pre>`;
+            } catch (error) {
+                html += `<div class="result error">❌ Error: ${error.message}</div>`;
+            }
+            html += '</div>';
+            
+            // Test 2: Verificar Google Sheets
+            html += '<div class="test">';
+            html += '<h3>Test 2: Verificar acceso a Google Sheets</h3>';
+            try {
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=Orders_Data`;
+                const response = await fetch(url);
+                
+                if (response.ok) {
+                    const csvText = await response.text();
+                    const lines = csvText.split('\n').filter(l => l.trim());
+                    const ordersCount = lines.length - 1;
+                    
+                    html += `<div class="result success">✅ Google Sheets accesible: ${ordersCount} órdenes encontradas</div>`;
+                    html += `<pre>${lines.slice(0, 3).join('\n')}</pre>`;
+                } else {
+                    html += `<div class="result error">❌ Error ${response.status}: No se puede acceder a Google Sheets</div>`;
+                }
+            } catch (error) {
+                html += `<div class="result error">❌ Error: ${error.message}</div>`;
+            }
+            html += '</div>';
+            
+            // Test 3: Verificar CONFIG
+            html += '<div class="test">';
+            html += '<h3>Test 3: Verificar configuración (config.js)</h3>';
+            if (typeof CONFIG !== 'undefined') {
+                html += '<div class="result success">✅ CONFIG cargado correctamente</div>';
+                html += `<pre>SHEET_ID: ${CONFIG.GOOGLE_SHEETS.SHEET_ID}\nORDERS_SHEET: ${CONFIG.GOOGLE_SHEETS.ORDERS_SHEET}</pre>`;
+            } else {
+                html += '<div class="result error">❌ CONFIG no está definido</div>';
+            }
+            html += '</div>';
+            
+            // Test 4: Verificar qué archivos JS se están cargando
+            html += '<div class="test">';
+            html += '<h3>Test 4: Scripts cargados en la página</h3>';
+            const scripts = Array.from(document.scripts).map(s => s.src || s.innerHTML.substring(0, 100));
+            html += '<div class="result">Scripts encontrados:</div>';
+            html += `<pre>${scripts.join('\n---\n')}</pre>`;
+            html += '</div>';
+            
+            // Test 5: Intentar cargar datos como lo haría el dashboard
+            html += '<div class="test">';
+            html += '<h3>Test 5: Simular carga de datos del dashboard</h3>';
+            try {
+                // Primero intentar Google Sheets
+                const sheetsUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=Orders_Data`;
+                const sheetsResponse = await fetch(sheetsUrl);
+                
+                if (sheetsResponse.ok) {
+                    const csvText = await sheetsResponse.text();
+                    const lines = csvText.split('\n').filter(l => l.trim());
+                    html += `<div class="result success">✅ Debería cargar ${lines.length - 1} órdenes de Google Sheets</div>`;
+                } else {
+                    // Fallback a sample-data.json
+                    const sampleResponse = await fetch('/sample-data.json');
+                    const sampleData = await sampleResponse.json();
+                    html += `<div class="result warning">⚠️ Google Sheets falló, usaría sample-data.json con ${sampleData.orders.length} órdenes</div>`;
+                }
+            } catch (error) {
+                html += `<div class="result error">❌ Error: ${error.message}</div>`;
+            }
+            html += '</div>';
+            
+            // Test 6: Verificar localStorage y sessionStorage
+            html += '<div class="test">';
+            html += '<h3>Test 6: Verificar almacenamiento local</h3>';
+            const localData = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                localData.push(`${key}: ${localStorage.getItem(key).substring(0, 100)}`);
+            }
+            if (localData.length > 0) {
+                html += '<div class="result warning">⚠️ Datos en localStorage:</div>';
+                html += `<pre>${localData.join('\n')}</pre>`;
+            } else {
+                html += '<div class="result success">✅ No hay datos en localStorage</div>';
+            }
+            html += '</div>';
+            
+            // Conclusión
+            html += '<div class="test">';
+            html += '<h3>🎯 Conclusión y Solución</h3>';
+            html += '<div class="result warning">';
+            html += '<p><strong>Si ves 10 órdenes en el dashboard:</strong></p>';
+            html += '<ol>';
+            html += '<li>El problema está en el archivo <code>shopify-analytics-script.js</code></li>';
+            html += '<li>Ese archivo tiene los datos de muestra HARDCODEADOS o en caché</li>';
+            html += '<li>Necesitamos modificar ese archivo para forzar Google Sheets</li>';
+            html += '</ol>';
+            html += '<p><strong>Solución:</strong> Voy a crear una versión modificada del script que SOLO use Google Sheets</p>';
+            html += '</div>';
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        // Auto-ejecutar al cargar
+        window.addEventListener('load', () => {
+            setTimeout(runAllTests, 500);
+        });
+    </script>
+</body>
+</html>

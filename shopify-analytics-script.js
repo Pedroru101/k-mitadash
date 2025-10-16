@@ -358,13 +358,6 @@ async function loadShopifyData() {
         // Iniciar auto-refresh si está habilitado
         if (DATA_CONFIG.AUTO_REFRESH_ENABLED) {
             startAutoRefresh();
-            // Mostrar indicador de auto-refresh configurado
-            const autoRefreshElement = document.getElementById('autoRefreshStatus');
-            if (autoRefreshElement) {
-                const hours = DATA_CONFIG.REFRESH_INTERVAL / 1000 / 60 / 60;
-                autoRefreshElement.textContent = `🔄 Auto-refresh: Activo (${hours}h)`;
-                autoRefreshElement.style.display = 'block';
-            }
         }
 
     } catch (error) {
@@ -393,7 +386,7 @@ async function loadSampleData() {
         }
 
         const sampleData = await response.json();
-        
+
         ordersData = sampleData.orders || [];
         customersData = sampleData.customers || [];
 
@@ -416,27 +409,57 @@ async function loadSampleData() {
     }
 }
 
-// Función para parsear CSV (versión simplificada)
+// Función para parsear CSV (versión mejorada que maneja comillas y comas)
 function parseGoogleSheetsCSVResponse(csvText) {
     if (!csvText || csvText.trim() === '') return [];
 
     const lines = csvText.split('\n').filter(line => line.trim());
     if (lines.length === 0) return [];
 
-    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    // Parser CSV que maneja campos con comillas y comas
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    }
+
+    const headers = parseCSVLine(lines[0]);
     const data = [];
+    const seenIds = new Set(); // Para evitar duplicados
 
     for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+        const values = parseCSVLine(lines[i]);
         if (values.length > 0 && values.some(v => v !== '')) {
             const rowData = {};
             headers.forEach((header, index) => {
                 rowData[header] = values[index] || '';
             });
-            data.push(rowData);
+
+            // Evitar duplicados basados en el primer campo (ID)
+            const id = values[0];
+            if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                data.push(rowData);
+            }
         }
     }
 
+    console.log(`[CSV Parser] Parseadas ${data.length} filas únicas de ${lines.length - 1} totales`);
     return data;
 }
 
@@ -510,15 +533,15 @@ function updateKmitaKPIs() {
         fulfillment_status: o.fulfillment_status
     })));
 
+    // Usar el campo fulfillment_days que ya viene calculado desde Google Sheets
     const fulfillmentDays = filteredOrders
         .map(order => {
-            // Usar fulfillment_created_at si existe, sino processed_at
-            const fulfillmentDate = order.fulfillment_created_at || order.processed_at;
-            return calculateFulfillmentDays(order.created_at, fulfillmentDate);
+            const days = parseFloat(order.fulfillment_days);
+            return (!isNaN(days) && days >= 0) ? days : null;
         })
-        .filter(days => days !== null && days >= 0);
+        .filter(days => days !== null);
 
-    console.log('[DEBUG] Días de fulfillment calculados:', fulfillmentDays.slice(0, 10));
+    console.log('[DEBUG] Días de fulfillment obtenidos de Google Sheets:', fulfillmentDays.slice(0, 10));
 
     const avgFulfillmentDays = fulfillmentDays.length > 0 ?
         fulfillmentDays.reduce((sum, days) => sum + days, 0) / fulfillmentDays.length : 0;
@@ -671,12 +694,16 @@ function calculateAvgFulfillmentForMonth(ordersData, month) {
     const monthOrders = ordersData.filter(order => {
         const date = new Date(order.created_at);
         return !isNaN(date.getTime()) &&
-               `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` === month;
+            `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` === month;
     });
 
+    // Usar el campo fulfillment_days que ya viene calculado desde Google Sheets
     const fulfillmentDays = monthOrders
-        .map(order => calculateFulfillmentDays(order.created_at, order.processed_at || order.fulfillment_created_at))
-        .filter(days => days !== null && days >= 0);
+        .map(order => {
+            const days = parseFloat(order.fulfillment_days);
+            return (!isNaN(days) && days >= 0) ? days : null;
+        })
+        .filter(days => days !== null);
 
     return fulfillmentDays.length > 0 ? fulfillmentDays.reduce((sum, days) => sum + days, 0) / fulfillmentDays.length : 0;
 }
@@ -773,7 +800,7 @@ function generateSalesTrendChart(ordersData) {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return '$' + value.toLocaleString('es-MX');
                         }
                     }
@@ -860,7 +887,7 @@ function generateGeographicChart(ordersData) {
     });
 
     const sortedStates = Object.entries(stateSales)
-        .sort(([,a], [,b]) => b - a)
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 10);
 
     const ctx = document.getElementById('geographicChart');
@@ -889,7 +916,7 @@ function generateGeographicChart(ordersData) {
                 x: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return '$' + value.toLocaleString('es-MX');
                         }
                     }
@@ -1161,7 +1188,7 @@ function generateSalesByStateChart(ordersData) {
     });
 
     const sortedStates = Object.entries(stateSales)
-        .sort(([,a], [,b]) => b - a)
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 10);
 
     const ctx = document.getElementById('salesByStateChart');
@@ -1190,7 +1217,7 @@ function generateSalesByStateChart(ordersData) {
                 x: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return '$' + value.toLocaleString('es-MX');
                         }
                     }
@@ -1544,7 +1571,7 @@ function populateDetailedAnalysisTable(ordersData) {
 // ===========================================
 
 // Event listener único para DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('[INIT] DOM cargado, configurando dashboard K-mita');
 
     // Verificar autenticación persistida
@@ -1607,13 +1634,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // Configurar filtros de período
 function setupPeriodFilters() {
     const filterButtons = document.querySelectorAll('.period-btn');
-    
+
     console.log(`[FILTER] Encontrados ${filterButtons.length} botones de período`);
 
     filterButtons.forEach(button => {
         console.log(`[FILTER] Configurando botón: ${button.textContent} (${button.getAttribute('data-period')})`);
-        
-        button.addEventListener('click', function() {
+
+        button.addEventListener('click', function () {
             // Remover clase activa de todos los botones
             filterButtons.forEach(btn => btn.classList.remove('active'));
 
@@ -1645,10 +1672,10 @@ function setupPeriodFilters() {
 function updateFilterStatus(filterText) {
     const filterStatus = document.getElementById('filterStatus');
     const filterStatusText = document.getElementById('filterStatusText');
-    
+
     if (filterStatus && filterStatusText) {
         filterStatusText.textContent = filterText;
-        
+
         // Mostrar el indicador si no es "Todo el tiempo"
         if (currentPeriod === 'all') {
             filterStatus.style.display = 'none';
@@ -1664,7 +1691,7 @@ function filterDataByPeriod(data) {
         console.log('[FILTER] No hay datos para filtrar');
         return [];
     }
-    
+
     if (currentPeriod === 'all') {
         console.log(`[FILTER] Mostrando todos los datos: ${data.length} registros`);
         return data;
@@ -2018,7 +2045,7 @@ function generateBusinessInsights() {
     });
 
     const topState = Object.entries(stateSales)
-        .sort(([,a], [,b]) => b - a)[0];
+        .sort(([, a], [, b]) => b - a)[0];
 
     if (topState) {
         insights.push({
@@ -2195,8 +2222,16 @@ function updateAutoRefreshStatus() {
     const statusElement = document.getElementById('dataSourceStatus');
     if (!statusElement) return;
 
+    // Obtener el mensaje base sin el estado de auto-refresh
     let statusMessage = statusElement.textContent || '';
 
+    // Remover TODOS los textos previos de auto-refresh (con cualquier emoji o variación)
+    statusMessage = statusMessage
+        .replace(/[⏸️🔄⏸]\s*(Auto-refresh:?\s*)?(Activo|Inactivo|Active).*?(\(.*?\))?/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Agregar el nuevo estado
     if (autoRefreshInterval) {
         const hours = DATA_CONFIG.REFRESH_INTERVAL / 1000 / 60 / 60;
         statusMessage += ` 🔄 Auto-refresh: Activo (${hours}h)`;
@@ -2223,11 +2258,11 @@ console.log('✅ Script K-mita Analytics cargado correctamente');
 // ===========================================
 
 // Agregar event listener para el botón de informe mensual
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const monthlyReportBtn = document.getElementById('monthlyReportBtn');
-    
+
     if (monthlyReportBtn) {
-        monthlyReportBtn.addEventListener('click', function() {
+        monthlyReportBtn.addEventListener('click', function () {
             console.log('[NAVIGATION] Navegando a informe mensual');
             window.location.href = 'informe-mensual.html';
         });

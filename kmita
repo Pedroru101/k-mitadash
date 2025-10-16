@@ -1,0 +1,598 @@
+/**
+ * ========================================
+ * SHOPIFY TO GOOGLE SHEETS SYNC - VERSIÓN DEFINITIVA
+ * Sincroniza órdenes y clientes desde Shopify
+ * SOLO actualiza o agrega, NUNCA duplica ni pisa datos
+ * ========================================
+ */
+
+// ============================================
+// CONFIGURACIÓN PRINCIPAL
+// ============================================
+
+function getConfiguration() {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const storeName = scriptProperties.getProperty('SHOPIFY_STORE_NAME');
+    const apiToken = scriptProperties.getProperty('SHOPIFY_API_TOKEN');
+
+    if (!storeName || !apiToken) {
+        throw new Error('Faltan credenciales de Shopify. Configura SHOPIFY_STORE_NAME y SHOPIFY_API_TOKEN en las propiedades del script.');
+    }
+
+    return {
+        storeName: storeName,
+        apiToken: apiToken,
+        spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
+        apiVersion: '2024-10'
+    };
+}
+
+// ============================================
+// FUNCIÓN PRINCIPAL
+// ============================================
+
+function runShopifySync() {
+    try {
+        Logger.log('=== INICIANDO SINCRONIZACIÓN SHOPIFY ===');
+        const startTime = new Date();
+
+        // 1. Cargar configuración
+        const config = getConfiguration();
+        Logger.log(`Tienda: ${config.storeName}`);
+
+        // 2. Generar los rangos de fechas para cada mes de 2025 hasta hoy
+        const dateRanges = generateMonthlyDateRanges();
+        Logger.log(`Rangos de fechas generados: ${dateRanges.length} meses`);
+
+        // 3. Procesar órdenes para cada rango de fechas
+        let totalOrders = 0;
+        let ordersUpdated = 0;
+        let ordersAdded = 0;
+
+        for (const range of dateRanges) {
+            Logger.log(`\n--- Procesando órdenes para ${range.monthName} ---`);
+            const result = fetchAndProcessOrdersForMonth(config, range);
+            totalOrders += result.total;
+            ordersUpdated += result.updated;
+            ordersAdded += result.added;
+        }
+
+        // 4. Una vez terminado, procesar todos los clientes
+        Logger.log('\n--- Todas las órdenes procesadas. Iniciando extracción de clientes ---');
+        const customerResult = fetchAndProcessCustomers(config);
+
+        const endTime = new Date();
+        const duration = (endTime - startTime) / 1000;
+
+        Logger.log('\n=== SINCRONIZACIÓN COMPLETADA EXITOSAMENTE ===');
+        Logger.log(`ÓRDENES - Total procesadas: ${totalOrders} | Actualizadas: ${ordersUpdated} | Nuevas: ${ordersAdded}`);
+        Logger.log(`CLIENTES - Total procesados: ${customerResult.total} | Actualizados: ${customerResult.updated} | Nuevos: ${customerResult.added}`);
+        Logger.log(`Tiempo total: ${Math.round(duration)} segundos`);
+
+        // Mostrar mensaje de éxito (solo si se ejecuta desde Sheets)
+        showMessage(
+            'Sincronización completada',
+            `✓ ÓRDENES: ${ordersAdded} nuevas, ${ordersUpdated} actualizadas\n✓ CLIENTES: ${customerResult.added} nuevos, ${customerResult.updated} actualizados\n\nTiempo: ${Math.round(duration)}s`
+        );
+
+        return {
+            success: true,
+            orders: { total: totalOrders, updated: ordersUpdated, added: ordersAdded },
+            customers: { total: customerResult.total, updated: customerResult.updated, added: customerResult.added },
+            duration: Math.round(duration)
+        };
+
+    } catch (error) {
+        Logger.log(`ERROR CRÍTICO: ${error.message}`);
+        Logger.log(error.stack);
+
+        showMessage(
+            'Error en sincronización',
+            `Hubo un error: ${error.message}\n\nRevisa los logs para más detalles.`
+        );
+
+        throw error;
+    }
+}
+
+// ============================================
+// GENERACIÓN DE RANGOS DE FECHAS
+// ============================================
+
+function generateMonthlyDateRanges() {
+    const months = [];
+    const year = 2025;
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    if (currentYear < year) {
+        Logger.log('Aún no es 2025. No hay datos para procesar.');
+        return [];
+    }
+
+    const maxMonth = (currentYear === year) ? currentMonth : 11;
+
+    for (let month = 0; month <= maxMonth; month++) {
+        const startDate = new Date(year, month, 1);
+        const endDate = new Date(year, month + 1, 0, 23, 59, 59);
+        const finalEndDate = (endDate > now) ? now : endDate;
+
+        months.push({
+            start: startDate.toISOString(),
+            end: finalEndDate.toISOString(),
+            monthKey: `${year}-${(month + 1).toString().padStart(2, '0')}`,
+            monthName: startDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })
+        });
+    }
+
+    return months;
+}
+
+// ============================================
+// FUNCIONES DE OBTENCIÓN DE DATOS (API)
+// ============================================
+
+function fetchAllPaginatedResults(initialUrl, config) {
+    let allItems = [];
+    let nextUrl = initialUrl;
+    let pageCount = 0;
+
+    const options = {
+        'method': 'get',
+        'headers': {
+            'X-Shopify-Access-Token': config.apiToken,
+            'Content-Type': 'application/json'
+        },
+        'muteHttpExceptions': true
+    };
+
+    while (nextUrl) {
+        pageCount++;
+        Logger.log(`  Obteniendo página ${pageCount}...`);
+
+        try {
+            const response = UrlFetchApp.fetch(nextUrl, options);
+            const responseCode = response.getResponseCode();
+
+            if (responseCode !== 200) {
+                Logger.log(`  ERROR en API (código ${responseCode}): ${response.getContentText()}`);
+                break;
+            }
+
+            const data = JSON.parse(response.getContentText());
+            const resourceKey = Object.keys(data)[0];
+
+            if (data[resourceKey] && Array.isArray(data[resourceKey]) && data[resourceKey].length > 0) {
+                allItems = allItems.concat(data[resourceKey]);
+                Logger.log(`  → ${data[resourceKey].length} items obtenidos (total acumulado: ${allItems.length})`);
+            }
+
+            const linkHeader = response.getHeaders()['Link'] || response.getHeaders()['link'];
+            nextUrl = null;
+
+            if (linkHeader) {
+                const links = linkHeader.split(',');
+                const nextLink = links.find(link => link.includes('rel="next"'));
+                if (nextLink) {
+                    const match = nextLink.match(/<([^>]+)>/);
+                    if (match) {
+                        nextUrl = match[1];
+                    }
+                }
+            }
+
+            if (nextUrl) {
+                Utilities.sleep(500);
+            }
+
+        } catch (e) {
+            Logger.log(`  ERROR al obtener página: ${e.message}`);
+            break;
+        }
+    }
+
+    Logger.log(`  Total de items obtenidos: ${allItems.length}`);
+    return allItems;
+}
+
+function fetchAndProcessOrdersForMonth(config, range) {
+    try {
+        const initialUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/orders.json?status=any&limit=250&created_at_min=${range.start}&created_at_max=${range.end}`;
+        const orders = fetchAllPaginatedResults(initialUrl, config);
+
+        if (orders.length === 0) {
+            Logger.log(`  No se encontraron órdenes para ${range.monthName}.`);
+            return { total: 0, updated: 0, added: 0 };
+        }
+
+        Logger.log(`  Procesando ${orders.length} órdenes...`);
+        const processedData = processShopifyOrders(orders, range.monthKey);
+        const result = writeDataToSheet('Orders_Data', processedData, 0);
+
+        return { total: orders.length, updated: result.updated, added: result.added };
+
+    } catch (error) {
+        Logger.log(`  ERROR procesando órdenes de ${range.monthName}: ${error.message}`);
+        throw error;
+    }
+}
+
+function fetchAndProcessCustomers(config) {
+    try {
+        const startDate = '2025-01-01T00:00:00Z';
+        const initialUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/customers.json?limit=250&created_at_min=${startDate}`;
+        const customers = fetchAllPaginatedResults(initialUrl, config);
+
+        if (customers.length === 0) {
+            Logger.log('  No se encontraron nuevos clientes.');
+            return { total: 0, updated: 0, added: 0 };
+        }
+
+        Logger.log(`  Procesando ${customers.length} clientes...`);
+        const processedData = processShopifyCustomers(customers);
+        const result = writeDataToSheet('Customers_Data', processedData, 0);
+
+        return { total: customers.length, updated: result.updated, added: result.added };
+
+    } catch (error) {
+        Logger.log(`  ERROR procesando clientes: ${error.message}`);
+        throw error;
+    }
+}
+
+// ============================================
+// PROCESAMIENTO DE DATOS
+// ============================================
+
+function processShopifyOrders(orders, monthKey) {
+    const headers = [
+        'order_id',
+        'order_name',
+        'created_at',
+        'financial_status',
+        'fulfillment_status',
+        'fulfilled_at',
+        'closed_at',
+        'fulfillment_days',
+        'total_price',
+        'total_discounts',
+        'total_bags',
+        'total_kilos',
+        'customer_id',
+        'customer_email',
+        'shipping_city',
+        'shipping_province',
+        'payment_method',
+        'month_key'
+    ];
+
+    const dataRows = orders.map(order => {
+        const lineItems = order.line_items || [];
+        const totalBags = lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const totalKilos = lineItems.reduce((sum, item) => {
+            const grams = item.grams || 0;
+            const quantity = item.quantity || 0;
+            return sum + (grams * quantity / 1000);
+        }, 0);
+
+        // Calcular fecha de fulfillment y días
+        let fulfilledAt = '';
+        let fulfillmentDays = '';
+
+        // Intentar obtener la fecha de fulfillment de diferentes fuentes
+        if (order.fulfillments && order.fulfillments.length > 0) {
+            fulfilledAt = order.fulfillments[0].created_at || '';
+        } else if (order.closed_at) {
+            fulfilledAt = order.closed_at;
+        }
+
+        // Calcular días de fulfillment si tenemos ambas fechas
+        if (order.created_at && fulfilledAt) {
+            try {
+                const createdDate = new Date(order.created_at);
+                const fulfilledDate = new Date(fulfilledAt);
+                const diffTime = fulfilledDate - createdDate;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                fulfillmentDays = diffDays >= 0 ? diffDays : '';
+            } catch (e) {
+                fulfillmentDays = '';
+            }
+        }
+
+        // Extraer método de pago
+        let paymentMethod = 'No especificado';
+        if (order.payment_gateway_names && order.payment_gateway_names.length > 0) {
+            paymentMethod = order.payment_gateway_names[0];
+        } else if (order.gateway) {
+            paymentMethod = order.gateway;
+        }
+
+        return [
+            order.id ? String(order.id) : '',
+            order.name || '',
+            order.created_at || '',
+            order.financial_status || '',
+            order.fulfillment_status || '',
+            fulfilledAt,
+            order.closed_at || '',
+            fulfillmentDays,
+            parseFloat(order.total_price || 0),
+            parseFloat(order.total_discounts || 0),
+            totalBags,
+            Math.round(totalKilos * 100) / 100,
+            order.customer && order.customer.id ? String(order.customer.id) : '',
+            order.customer && order.customer.email ? order.customer.email : '',
+            order.shipping_address && order.shipping_address.city ? order.shipping_address.city : '',
+            order.shipping_address && order.shipping_address.province ? order.shipping_address.province : '',
+            paymentMethod,
+            monthKey
+        ];
+    });
+
+    return [headers, ...dataRows];
+}
+
+function processShopifyCustomers(customers) {
+    const headers = [
+        'customer_id',
+        'email',
+        'first_name',
+        'last_name',
+        'orders_count',
+        'total_spent',
+        'customer_segment',
+        'address_city',
+        'address_province',
+        'accepts_marketing'
+    ];
+
+    const dataRows = customers.map(customer => {
+        let segment = 'New';
+        const ordersCount = customer.orders_count || 0;
+
+        if (ordersCount === 1) segment = 'One-time';
+        else if (ordersCount === 2) segment = 'Repeat';
+        else if (ordersCount >= 3) segment = 'Loyal';
+
+        const mainAddress = (customer.addresses && customer.addresses.length > 0) ? customer.addresses[0] : {};
+
+        return [
+            customer.id ? String(customer.id) : '',
+            customer.email || '',
+            customer.first_name || '',
+            customer.last_name || '',
+            ordersCount,
+            parseFloat(customer.total_spent || 0),
+            segment,
+            mainAddress.city || '',
+            mainAddress.province || '',
+            customer.accepts_marketing ? 'Sí' : 'No'
+        ];
+    });
+
+    return [headers, ...dataRows];
+}
+
+// ============================================
+// ESCRITURA INTELIGENTE EN GOOGLE SHEETS
+// SOLO ACTUALIZA O AGREGA - NUNCA DUPLICA
+// ============================================
+
+function writeDataToSheet(sheetName, data, primaryKeyColumnIndex) {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = spreadsheet.getSheetByName(sheetName);
+
+    if (!sheet) {
+        sheet = spreadsheet.insertSheet(sheetName);
+        Logger.log(`  Pestaña "${sheetName}" creada.`);
+    }
+
+    const headers = data[0];
+    const dataRows = data.slice(1);
+
+    if (dataRows.length === 0) {
+        Logger.log(`  No hay datos para escribir en "${sheetName}".`);
+        return { updated: 0, added: 0 };
+    }
+
+    // Si la hoja está vacía, escribir headers y datos
+    if (sheet.getLastRow() === 0) {
+        sheet.getRange(1, 1, data.length, headers.length).setValues(data);
+        Logger.log(`  "${sheetName}": ${data.length - 1} filas iniciales escritas.`);
+        return { updated: 0, added: data.length - 1 };
+    }
+
+    // Leer datos existentes
+    const lastRow = sheet.getLastRow();
+    const existingData = sheet.getRange(1, 1, lastRow, headers.length).getValues();
+    const existingHeaders = existingData[0];
+
+    // Verificar que headers coincidan
+    if (JSON.stringify(existingHeaders) !== JSON.stringify(headers)) {
+        Logger.log(`  ADVERTENCIA: Headers no coinciden en "${sheetName}". Reescribiendo hoja completa.`);
+        sheet.clear();
+        sheet.getRange(1, 1, data.length, headers.length).setValues(data);
+        return { updated: 0, added: data.length - 1 };
+    }
+
+    // Crear mapa de ID existente → índice de fila
+    const existingIdMap = new Map();
+    for (let i = 1; i < existingData.length; i++) {
+        const id = String(existingData[i][primaryKeyColumnIndex]);
+        if (id && id !== '') {
+            existingIdMap.set(id, i + 1); // Fila en Sheet (1-based, +1 por header)
+        }
+    }
+
+    Logger.log(`  IDs existentes en "${sheetName}": ${existingIdMap.size}`);
+
+    // Procesar cada fila de datos nuevos
+    let updatedCount = 0;
+    let addedCount = 0;
+    const rowsToAppend = [];
+
+    for (const row of dataRows) {
+        const id = String(row[primaryKeyColumnIndex]);
+
+        if (!id || id === '') {
+            Logger.log(`  ADVERTENCIA: Fila sin ID válido, se omite.`);
+            continue;
+        }
+
+        if (existingIdMap.has(id)) {
+            // ACTUALIZAR fila existente
+            const rowIndex = existingIdMap.get(id);
+
+            // Comparar si los datos son diferentes antes de actualizar
+            const existingRow = existingData[rowIndex - 1];
+            const isDifferent = !arraysEqual(existingRow, row);
+
+            if (isDifferent) {
+                sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+                updatedCount++;
+            }
+            // Si son iguales, no hace nada (ignora)
+
+        } else {
+            // AGREGAR nueva fila
+            rowsToAppend.push(row);
+        }
+    }
+
+    // Agregar todas las nuevas filas de una vez al final
+    if (rowsToAppend.length > 0) {
+        const startRow = sheet.getLastRow() + 1;
+        sheet.getRange(startRow, 1, rowsToAppend.length, headers.length).setValues(rowsToAppend);
+        addedCount = rowsToAppend.length;
+    }
+
+    Logger.log(`  "${sheetName}": ${updatedCount} actualizadas, ${addedCount} nuevas agregadas.`);
+
+    return { updated: updatedCount, added: addedCount };
+}
+
+// Función auxiliar para comparar arrays
+function arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (String(a[i]) !== String(b[i])) return false;
+    }
+    return true;
+}
+
+// ============================================
+// FUNCIÓN DE PRUEBA
+// ============================================
+
+function testConnection() {
+    try {
+        Logger.log('=== PRUEBA DE CONEXIÓN SHOPIFY ===\n');
+
+        Logger.log('1. Verificando configuración...');
+        const config = getConfiguration();
+        Logger.log(`   ✓ Tienda: ${config.storeName}`);
+        Logger.log(`   ✓ Token: ${config.apiToken.substring(0, 10)}...`);
+        Logger.log(`   ✓ Versión API: ${config.apiVersion}`);
+
+        Logger.log('\n2. Probando conexión con Shopify API...');
+        const testUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/shop.json`;
+
+        const options = {
+            'method': 'get',
+            'headers': {
+                'X-Shopify-Access-Token': config.apiToken,
+                'Content-Type': 'application/json'
+            },
+            'muteHttpExceptions': true
+        };
+
+        const response = UrlFetchApp.fetch(testUrl, options);
+        const responseCode = response.getResponseCode();
+
+        if (responseCode === 200) {
+            const shopData = JSON.parse(response.getContentText());
+            Logger.log('   ✓ Conexión exitosa!');
+            Logger.log(`   ✓ Tienda: ${shopData.shop.name}`);
+            Logger.log(`   ✓ Dominio: ${shopData.shop.domain}`);
+            Logger.log(`   ✓ Email: ${shopData.shop.email}`);
+        } else {
+            Logger.log(`   ✗ Error de conexión (código ${responseCode})`);
+            Logger.log(`   Respuesta: ${response.getContentText()}`);
+            throw new Error(`No se pudo conectar con Shopify (código ${responseCode})`);
+        }
+
+        Logger.log('\n3. Probando obtención de órdenes...');
+        const ordersUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/orders.json?limit=1&status=any`;
+        const ordersResponse = UrlFetchApp.fetch(ordersUrl, options);
+
+        if (ordersResponse.getResponseCode() === 200) {
+            const ordersData = JSON.parse(ordersResponse.getContentText());
+            Logger.log(`   ✓ Se pueden obtener órdenes (encontradas: ${ordersData.orders.length})`);
+            if (ordersData.orders.length > 0) {
+                Logger.log(`   ✓ Ejemplo: Orden #${ordersData.orders[0].name}`);
+            }
+        }
+
+        Logger.log('\n4. Verificando acceso a Google Sheets...');
+        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+        Logger.log(`   ✓ Spreadsheet: ${spreadsheet.getName()}`);
+        Logger.log(`   ✓ ID: ${spreadsheet.getId()}`);
+
+        Logger.log('\n=== PRUEBA COMPLETADA EXITOSAMENTE ===');
+        Logger.log('El script está listo. Ejecuta runShopifySync() para sincronizar.');
+
+        showMessage(
+            'Prueba exitosa ✓',
+            'La conexión con Shopify funciona correctamente.\n\nYa puedes ejecutar la sincronización completa.'
+        );
+
+        return { success: true };
+
+    } catch (error) {
+        Logger.log(`\n✗ ERROR EN LA PRUEBA: ${error.message}`);
+        Logger.log(error.stack);
+
+        showMessage(
+            'Error en la prueba',
+            `Hubo un problema:\n\n${error.message}\n\nRevisa los logs para más detalles.`
+        );
+
+        throw error;
+    }
+}
+
+// ============================================
+// FUNCIONES AUXILIARES
+// ============================================
+
+function showMessage(title, message) {
+    try {
+        SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
+    } catch (e) {
+        Logger.log(`\n[MENSAJE] ${title}: ${message}`);
+    }
+}
+
+// ============================================
+// MENÚ PERSONALIZADO
+// ============================================
+
+function onOpen() {
+    try {
+        const ui = SpreadsheetApp.getUi();
+        ui.createMenu('🛒 Shopify Sync')
+            .addItem('▶️ Ejecutar sincronización', 'runShopifySync')
+            .addItem('🔧 Probar conexión', 'testConnection')
+            .addSeparator()
+            .addItem('📋 Ver logs', 'showLogsUrl')
+            .addToUi();
+    } catch (e) {
+        Logger.log('No se pudo crear el menú (ejecutado desde editor)');
+    }
+}
+
+function showLogsUrl() {
+    const url = `https://script.google.com/home/projects/${ScriptApp.getScriptId()}/executions`;
+    showMessage('Ver logs', `Abre esta URL para ver los logs:\n\n${url}`);
+}

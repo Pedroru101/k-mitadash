@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Conexión - Datos Reales</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .metric {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 15px 25px;
+            margin: 10px;
+            border-radius: 5px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test de Conexión a Datos Reales de Shopify</h1>
+        
+        <div id="status"></div>
+        
+        <button onclick="testConnection()">🔄 Probar Conexión</button>
+        <button onclick="loadAndAnalyze()">📊 Cargar y Analizar Datos</button>
+        <button onclick="compareData()">⚖️ Comparar con Datos de Muestra</button>
+        
+        <div id="results"></div>
+        <div id="data"></div>
+    </div>
+
+    <script>
+        const SHEET_ID = '1fWJxqNKv7Fm0uldTh7RhxwgVXpdWnp7dR4HsXn8bfZ0';
+        const ORDERS_SHEET = 'Orders_Data';
+        const CUSTOMERS_SHEET = 'Customers_Data';
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = message;
+        }
+
+        function showResults(html) {
+            document.getElementById('results').innerHTML = html;
+        }
+
+        function showData(html) {
+            document.getElementById('data').innerHTML = html;
+        }
+
+        async function testConnection() {
+            showStatus('🔄 Probando conexión...', 'info');
+            showResults('');
+            showData('');
+
+            try {
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(ORDERS_SHEET)}`;
+                
+                console.log('URL:', url);
+                
+                const response = await fetch(url);
+                
+                console.log('Response:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        showStatus('❌ Error 403: El Google Sheet NO es público. Ve a Compartir → "Cualquiera con el enlace puede ver"', 'error');
+                    } else if (response.status === 404) {
+                        showStatus('❌ Error 404: Google Sheet o hoja no encontrada', 'error');
+                    } else {
+                        showStatus(`❌ Error ${response.status}: ${response.statusText}`, 'error');
+                    }
+                    return;
+                }
+
+                const csvText = await response.text();
+                const lines = csvText.split('\n').filter(line => line.trim());
+                
+                showStatus(`✅ ¡Conexión Exitosa! Se encontraron ${lines.length - 1} órdenes`, 'success');
+                
+                let resultsHTML = '<h2>📊 Resultados:</h2>';
+                resultsHTML += `<div class="metric"><div class="metric-value">${lines.length - 1}</div><div class="metric-label">Órdenes Encontradas</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">${response.status}</div><div class="metric-label">Status Code</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">✅</div><div class="metric-label">Sheet Público</div></div>`;
+                
+                showResults(resultsHTML);
+                
+                let dataHTML = '<h3>📋 Primeras 3 filas:</h3><pre>';
+                dataHTML += lines.slice(0, 3).join('\n');
+                dataHTML += '</pre>';
+                
+                showData(dataHTML);
+                
+            } catch (error) {
+                showStatus(`❌ Error de red: ${error.message}`, 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        async function loadAndAnalyze() {
+            showStatus('📊 Cargando y analizando datos...', 'info');
+            
+            try {
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(ORDERS_SHEET)}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    showStatus(`❌ Error ${response.status}`, 'error');
+                    return;
+                }
+
+                const csvText = await response.text();
+                const lines = csvText.split('\n').filter(line => line.trim());
+                const headers = lines[0].split(',');
+                
+                // Parsear datos
+                const orders = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',');
+                    const order = {};
+                    headers.forEach((header, index) => {
+                        order[header] = values[index] || '';
+                    });
+                    orders.push(order);
+                }
+                
+                // Analizar
+                const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
+                const totalKilos = orders.reduce((sum, order) => sum + parseFloat(order.total_kilos || 0), 0);
+                const totalBags = orders.reduce((sum, order) => sum + parseFloat(order.total_bags || 0), 0);
+                
+                const states = [...new Set(orders.map(o => o.shipping_province).filter(s => s))];
+                const paymentMethods = [...new Set(orders.map(o => o.payment_method).filter(p => p))];
+                const customers = [...new Set(orders.map(o => o.customer_email).filter(e => e))];
+                
+                showStatus('✅ Datos analizados correctamente', 'success');
+                
+                let resultsHTML = '<h2>📊 Análisis de Datos Reales:</h2>';
+                resultsHTML += `<div class="metric"><div class="metric-value">${orders.length}</div><div class="metric-label">Total Órdenes</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">$${totalRevenue.toFixed(2)}</div><div class="metric-label">Ingresos Totales</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">${totalKilos.toFixed(0)} kg</div><div class="metric-label">Total Kilos</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">${totalBags}</div><div class="metric-label">Total Bolsas</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">${customers.length}</div><div class="metric-label">Clientes Únicos</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">${states.length}</div><div class="metric-label">Estados</div></div>`;
+                resultsHTML += `<div class="metric"><div class="metric-value">${paymentMethods.length}</div><div class="metric-label">Métodos de Pago</div></div>`;
+                
+                showResults(resultsHTML);
+                
+                let dataHTML = '<h3>📍 Estados encontrados:</h3><pre>';
+                dataHTML += states.join(', ');
+                dataHTML += '</pre>';
+                dataHTML += '<h3>💳 Métodos de pago encontrados:</h3><pre>';
+                dataHTML += paymentMethods.join(', ');
+                dataHTML += '</pre>';
+                dataHTML += '<h3>📋 Campos disponibles:</h3><pre>';
+                dataHTML += headers.join(', ');
+                dataHTML += '</pre>';
+                
+                showData(dataHTML);
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        async function compareData() {
+            showStatus('⚖️ Comparando datos reales vs datos de muestra...', 'info');
+            
+            try {
+                // Cargar datos reales
+                const realUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(ORDERS_SHEET)}`;
+                const realResponse = await fetch(realUrl);
+                const realCsv = await realResponse.text();
+                const realLines = realCsv.split('\n').filter(line => line.trim());
+                
+                // Cargar datos de muestra
+                const sampleResponse = await fetch('sample-data.json');
+                const sampleData = await sampleResponse.json();
+                
+                showStatus('✅ Comparación completada', 'success');
+                
+                let resultsHTML = '<h2>⚖️ Comparación:</h2>';
+                resultsHTML += '<table style="width:100%; border-collapse: collapse;">';
+                resultsHTML += '<tr style="background:#f8f9fa;"><th style="padding:10px; border:1px solid #dee2e6;">Métrica</th><th style="padding:10px; border:1px solid #dee2e6;">Datos Reales</th><th style="padding:10px; border:1px solid #dee2e6;">Datos de Muestra</th></tr>';
+                resultsHTML += `<tr><td style="padding:10px; border:1px solid #dee2e6;">Órdenes</td><td style="padding:10px; border:1px solid #dee2e6; font-weight:bold; color:#007bff;">${realLines.length - 1}</td><td style="padding:10px; border:1px solid #dee2e6;">${sampleData.orders.length}</td></tr>`;
+                resultsHTML += `<tr><td style="padding:10px; border:1px solid #dee2e6;">Clientes</td><td style="padding:10px; border:1px solid #dee2e6; font-weight:bold; color:#007bff;">?</td><td style="padding:10px; border:1px solid #dee2e6;">${sampleData.customers.length}</td></tr>`;
+                resultsHTML += '</table>';
+                
+                if (realLines.length - 1 === sampleData.orders.length) {
+                    resultsHTML += '<div class="status warning" style="margin-top:20px;">⚠️ ADVERTENCIA: El número de órdenes coincide con los datos de muestra. Es posible que el dashboard esté usando datos de muestra en lugar de datos reales.</div>';
+                } else {
+                    resultsHTML += '<div class="status success" style="margin-top:20px;">✅ Los números son diferentes. El dashboard debería estar usando datos reales.</div>';
+                }
+                
+                showResults(resultsHTML);
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-ejecutar al cargar
+        window.addEventListener('load', () => {
+            showStatus('👋 Listo para probar. Haz clic en "Probar Conexión"', 'info');
+        });
+    </script>
+</body>
+</html>

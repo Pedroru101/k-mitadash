@@ -24,9 +24,9 @@ const CONFIG = {
         API_KEY: 'AIzaSyA2V6oAVFW14tUfAPay-57QgA9dwZWHhAE',
         ORDERS_SHEET: 'Orders_Data',
         CUSTOMERS_SHEET: 'Customers_Data',
-        // URLs publicadas directamente (cuando están disponibles)
-        PUBLISHED_ORDERS_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScm_4QAHxyMkGUDkH_j-YkQNFLyrGz7RDrkZKL1HPJLGceBeptGsrH5eFdJgru7pJufp6pWslTIeKs/pub?output=csv',
-        PUBLISHED_CUSTOMERS_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScm_4QAHxyMkGUDkH_j-YkQNFLyrGz7RDrkZKL1HPJLGceBeptGsrH5eFdJgru7pJufp6pWslTIeKs/pub?gid=1773573807&output=csv'
+        // URLs publicadas directamente - ACTUALIZADAS PARA FORZAR DATOS REALES
+        PUBLISHED_ORDERS_URL: null, // Forzar uso de export directo
+        PUBLISHED_CUSTOMERS_URL: null // Forzar uso de export directo
     },
     
     // ┌─────────────────────────────────────────────────────────────────────────────┐

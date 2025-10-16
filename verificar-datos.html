@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación de Datos - K-mita Analytics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 5px solid #ddd;
+        }
+
+        .status-card.success {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .status-card.warning {
+            border-left-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .status-card.error {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .status-card h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .status-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 10px 10px 0;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .metric {
+            display: inline-block;
+            background: #f8f9fa;
+            padding: 15px 25px;
+            border-radius: 8px;
+            margin: 10px 10px 10px 0;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #666;
+            display: block;
+        }
+
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+            display: block;
+        }
+
+        .log {
+            background: #1e293b;
+            color: #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .log-line {
+            margin: 5px 0;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        .log-warning {
+            color: #f59e0b;
+        }
+
+        .log-success {
+            color: #10b981;
+        }
+
+        .log-info {
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Verificación de Datos</h1>
+        <p class="subtitle">K-mita Analytics - Diagnóstico de Conexión</p>
+
+        <div id="statusContainer"></div>
+
+        <div>
+            <button class="btn" onclick="verificarConexion()">
+                🔄 Verificar Conexión a Google Sheets
+            </button>
+            <button class="btn" onclick="verificarDatosMuestra()">
+                📊 Verificar Datos de Muestra
+            </button>
+            <button class="btn" onclick="generarInforme()">
+                📝 Generar Informe Completo
+            </button>
+        </div>
+
+        <div id="results" class="results"></div>
+        <div id="log" class="log" style="display: none;"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        let logs = [];
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push({ timestamp, message, type });
+            updateLogDisplay();
+        }
+
+        function updateLogDisplay() {
+            const logDiv = document.getElementById('log');
+            logDiv.style.display = 'block';
+            logDiv.innerHTML = logs.map(log => 
+                `<div class="log-line log-${log.type}">[${log.timestamp}] ${log.message}</div>`
+            ).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showStatus(title, message, type = 'info') {
+            const container = document.getElementById('statusContainer');
+            const card = document.createElement('div');
+            card.className = `status-card ${type}`;
+            card.innerHTML = `<h3>${title}</h3><p>${message}</p>`;
+            container.appendChild(card);
+        }
+
+        function showMetric(label, value) {
+            const results = document.getElementById('results');
+            const metric = document.createElement('div');
+            metric.className = 'metric';
+            metric.innerHTML = `
+                <span class="metric-label">${label}</span>
+                <span class="metric-value">${value}</span>
+            `;
+            results.appendChild(metric);
+        }
+
+        async function verificarConexion() {
+            document.getElementById('statusContainer').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+            logs = [];
+
+            addLog('🔍 Iniciando verificación de conexión...', 'info');
+
+            // Verificar configuración
+            addLog(`📋 SHEET_ID: ${CONFIG.GOOGLE_SHEETS.SHEET_ID}`, 'info');
+            addLog(`📋 Orders Sheet: ${CONFIG.GOOGLE_SHEETS.ORDERS_SHEET}`, 'info');
+            addLog(`📋 Customers Sheet: ${CONFIG.GOOGLE_SHEETS.CUSTOMERS_SHEET}`, 'info');
+
+            // Intentar cargar datos de Google Sheets
+            try {
+                const ordersURL = `https://docs.google.com/spreadsheets/d/${CONFIG.GOOGLE_SHEETS.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CONFIG.GOOGLE_SHEETS.ORDERS_SHEET)}`;
+                
+                addLog('🌐 Intentando conectar a Google Sheets...', 'info');
+                addLog(`📡 URL: ${ordersURL}`, 'info');
+
+                const response = await fetch(ordersURL);
+                
+                addLog(`📊 Respuesta: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+
+                if (response.ok) {
+                    const csvText = await response.text();
+                    const lines = csvText.split('\n').filter(line => line.trim());
+                    
+                    addLog(`✅ Conexión exitosa!`, 'success');
+                    addLog(`📊 Filas encontradas: ${lines.length - 1} (sin contar header)`, 'success');
+
+                    showStatus(
+                        '✅ Conexión Exitosa',
+                        `Se encontraron ${lines.length - 1} órdenes en Google Sheets. Los datos reales están disponibles.`,
+                        'success'
+                    );
+
+                    showMetric('Órdenes Encontradas', lines.length - 1);
+
+                    // Mostrar primeras líneas
+                    addLog('📋 Primeras 3 líneas:', 'info');
+                    lines.slice(0, 3).forEach((line, i) => {
+                        addLog(`  ${i}: ${line.substring(0, 100)}...`, 'info');
+                    });
+
+                } else {
+                    addLog(`❌ Error de conexión: ${response.status}`, 'error');
+                    
+                    if (response.status === 403) {
+                        showStatus(
+                            '❌ Error 403: Acceso Denegado',
+                            'El Google Sheet no es público o no tienes permisos. Ve a Compartir → "Cualquiera con el enlace puede ver"',
+                            'error'
+                        );
+                    } else if (response.status === 404) {
+                        showStatus(
+                            '❌ Error 404: No Encontrado',
+                            'El Google Sheet o la hoja especificada no existe. Verifica el SHEET_ID y el nombre de la hoja.',
+                            'error'
+                        );
+                    } else {
+                        showStatus(
+                            `❌ Error ${response.status}`,
+                            'No se pudo conectar a Google Sheets. Verifica la configuración.',
+                            'error'
+                        );
+                    }
+                }
+
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                showStatus(
+                    '❌ Error de Red',
+                    `No se pudo conectar: ${error.message}. Verifica tu conexión a internet.`,
+                    'error'
+                );
+            }
+        }
+
+        async function verificarDatosMuestra() {
+            document.getElementById('statusContainer').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+            logs = [];
+
+            addLog('🔍 Verificando datos de muestra...', 'info');
+
+            try {
+                const response = await fetch('sample-data.json');
+                const data = await response.json();
+
+                addLog('✅ Datos de muestra cargados correctamente', 'success');
+                addLog(`📊 Órdenes: ${data.orders.length}`, 'info');
+                addLog(`👥 Clientes: ${data.customers.length}`, 'info');
+
+                showStatus(
+                    '✅ Datos de Muestra Disponibles',
+                    `Se encontraron ${data.orders.length} órdenes y ${data.customers.length} clientes en los datos de muestra.`,
+                    'success'
+                );
+
+                showMetric('Órdenes de Muestra', data.orders.length);
+                showMetric('Clientes de Muestra', data.customers.length);
+
+                // Calcular métricas
+                const totalRevenue = data.orders.reduce((sum, order) => sum + order.total_price, 0);
+                const totalKilos = data.orders.reduce((sum, order) => sum + order.total_kilos, 0);
+
+                showMetric('Ingresos Totales', `$${totalRevenue.toLocaleString('es-MX', {minimumFractionDigits: 2})}`);
+                showMetric('Total Kilos', `${totalKilos} kg`);
+
+                addLog('📊 Métricas calculadas:', 'success');
+                addLog(`  💰 Ingresos: $${totalRevenue.toFixed(2)}`, 'info');
+                addLog(`  ⚖️ Kilos: ${totalKilos} kg`, 'info');
+
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                showStatus(
+                    '❌ Error al Cargar Datos de Muestra',
+                    `No se pudieron cargar los datos de muestra: ${error.message}`,
+                    'error'
+                );
+            }
+        }
+
+        async function generarInforme() {
+            document.getElementById('statusContainer').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+            logs = [];
+
+            addLog('📝 Generando informe completo...', 'info');
+
+            // Verificar configuración
+            addLog('=== CONFIGURACIÓN ===', 'info');
+            addLog(`App: ${CONFIG.APP.NAME} v${CONFIG.APP.VERSION}`, 'info');
+            addLog(`Entorno: ${CONFIG.APP.ENVIRONMENT}`, 'info');
+            addLog(`SHEET_ID: ${CONFIG.GOOGLE_SHEETS.SHEET_ID}`, 'info');
+            addLog(`Auto-refresh: ${CONFIG.DATA.AUTO_REFRESH_ENABLED ? 'Habilitado' : 'Deshabilitado'}`, 'info');
+
+            // Verificar Google Sheets
+            addLog('\n=== GOOGLE SHEETS ===', 'info');
+            try {
+                const ordersURL = `https://docs.google.com/spreadsheets/d/${CONFIG.GOOGLE_SHEETS.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CONFIG.GOOGLE_SHEETS.ORDERS_SHEET)}`;
+                const response = await fetch(ordersURL);
+                
+                if (response.ok) {
+                    const csvText = await response.text();
+                    const lines = csvText.split('\n').filter(line => line.trim());
+                    addLog(`✅ Conexión exitosa a Google Sheets`, 'success');
+                    addLog(`📊 Órdenes encontradas: ${lines.length - 1}`, 'success');
+                    
+                    showStatus(
+                        '✅ Datos Reales Disponibles',
+                        `Tu dashboard está conectado a Google Sheets con ${lines.length - 1} órdenes.`,
+                        'success'
+                    );
+                } else {
+                    addLog(`⚠️ No se pudo conectar a Google Sheets (${response.status})`, 'warning');
+                    addLog(`ℹ️ El dashboard usará datos de muestra`, 'info');
+                    
+                    showStatus(
+                        '⚠️ Usando Datos de Muestra',
+                        'No se pudo conectar a Google Sheets. El dashboard está usando datos de muestra. Sigue las instrucciones en INFORME_ESTADO_DATOS.md para conectar datos reales.',
+                        'warning'
+                    );
+                }
+            } catch (error) {
+                addLog(`❌ Error al verificar Google Sheets: ${error.message}`, 'error');
+            }
+
+            // Verificar datos de muestra
+            addLog('\n=== DATOS DE MUESTRA ===', 'info');
+            try {
+                const response = await fetch('sample-data.json');
+                const data = await response.json();
+                addLog(`✅ Datos de muestra disponibles`, 'success');
+                addLog(`📊 ${data.orders.length} órdenes, ${data.customers.length} clientes`, 'info');
+            } catch (error) {
+                addLog(`❌ Error al cargar datos de muestra: ${error.message}`, 'error');
+            }
+
+            // Resumen
+            addLog('\n=== RESUMEN ===', 'info');
+            addLog('📋 Revisa el archivo INFORME_ESTADO_DATOS.md para más detalles', 'info');
+            addLog('📚 Consulta GUIA_RAPIDA.md para configuración', 'info');
+            addLog('🚀 Dashboard desplegado en: https://k-mitadash-new.netlify.app', 'success');
+        }
+
+        // Ejecutar verificación automática al cargar
+        window.addEventListener('load', () => {
+            addLog('🐈 K-mita Analytics - Verificación de Datos', 'success');
+            addLog('Haz clic en los botones para verificar la conexión', 'info');
+        });
+    </script>
+</body>
+</html>
