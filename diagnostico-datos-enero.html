@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico Datos Enero 2025</title>
+    <script src="config.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #059669;
+            margin-top: 30px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #2563eb;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-top: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: #475569;
+        }
+        tr:hover {
+            background: #f8fafc;
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico de Datos - Enero 2025</h1>
+        
+        <div class="success">
+            <strong>📊 Datos Reales Esperados (de tu Google Sheet):</strong><br>
+            • Unidades (Bolsas): 105<br>
+            • Kilos: 1,826 kg<br>
+            • Ventas Netas: $63,643.00 MXN<br>
+            • Precio por kg: $37.32 MXN
+        </div>
+
+        <button onclick="cargarDatos()">🔄 Cargar Datos de Google Sheets</button>
+        <button onclick="exportarCSV()">📥 Exportar a CSV</button>
+
+        <div id="loading" class="loading" style="display:none;">
+            ⏳ Cargando datos desde Google Sheets...
+        </div>
+
+        <div id="results" style="display:none;">
+            <h2>📈 Resumen de Datos Cargados</h2>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-label">Total Órdenes</div>
+                    <div class="stat-value" id="totalOrders">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Bolsas</div>
+                    <div class="stat-value" id="totalBags">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Kilos</div>
+                    <div class="stat-value" id="totalKilos">0 kg</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Ventas</div>
+                    <div class="stat-value" id="totalRevenue">$0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Precio/kg Promedio</div>
+                    <div class="stat-value" id="avgPricePerKg">$0</div>
+                </div>
+            </div>
+
+            <h2>📅 Órdenes de Enero 2025</h2>
+            <div id="enero2025Stats"></div>
+            <div style="max-height: 500px; overflow-y: auto;">
+                <table id="ordersTable">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Fecha</th>
+                            <th>Mes</th>
+                            <th>Bolsas</th>
+                            <th>Kilos</th>
+                            <th>Precio</th>
+                            <th>$/kg</th>
+                            <th>Cliente</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersBody"></tbody>
+                </table>
+            </div>
+
+            <h2>🔍 Análisis de Duplicados</h2>
+            <div id="duplicatesAnalysis"></div>
+
+            <h2>📊 Datos Raw (Primeras 5 órdenes)</h2>
+            <pre id="rawData"></pre>
+        </div>
+
+        <div id="error" class="error" style="display:none;"></div>
+    </div>
+
+    <script>
+        let ordersData = [];
+
+        function parseCSV(csvText) {
+            if (!csvText || csvText.trim() === '') return [];
+            
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length === 0) return [];
+
+            function parseCSVLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            }
+
+            const headers = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length > 0 && values.some(v => v !== '')) {
+                    const rowData = {};
+                    headers.forEach((header, index) => {
+                        rowData[header] = values[index] || '';
+                    });
+                    data.push(rowData);
+                }
+            }
+
+            return data;
+        }
+
+        async function cargarDatos() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+
+            try {
+                const ordersURL = `https://docs.google.com/spreadsheets/d/${CONFIG.GOOGLE_SHEETS.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CONFIG.GOOGLE_SHEETS.ORDERS_SHEET)}`;
+                
+                console.log('Cargando desde:', ordersURL);
+                
+                const response = await fetch(ordersURL);
+                
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+
+                const csvText = await response.text();
+                ordersData = parseCSV(csvText);
+
+                console.log('Datos cargados:', ordersData.length, 'órdenes');
+                console.log('Primera orden:', ordersData[0]);
+
+                analizarDatos();
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('error').textContent = `❌ Error: ${error.message}`;
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function analizarDatos() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+
+            // Filtrar órdenes de enero 2025
+            const enero2025 = ordersData.filter(order => {
+                const monthKey = order.month_key || '';
+                return monthKey === '2025-01';
+            });
+
+            console.log('Órdenes de enero 2025:', enero2025.length);
+
+            // Calcular totales
+            const totalOrders = enero2025.length;
+            const totalBags = enero2025.reduce((sum, o) => sum + parseFloat(o.total_bags || 0), 0);
+            const totalKilos = enero2025.reduce((sum, o) => sum + parseFloat(o.total_kilos || 0), 0);
+            const totalRevenue = enero2025.reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
+            const avgPricePerKg = totalKilos > 0 ? totalRevenue / totalKilos : 0;
+
+            // Actualizar stats
+            document.getElementById('totalOrders').textContent = totalOrders;
+            document.getElementById('totalBags').textContent = totalBags.toFixed(0);
+            document.getElementById('totalKilos').textContent = totalKilos.toFixed(0) + ' kg';
+            document.getElementById('totalRevenue').textContent = '$' + totalRevenue.toFixed(2);
+            document.getElementById('avgPricePerKg').textContent = '$' + avgPricePerKg.toFixed(2);
+
+            // Comparar con datos esperados
+            const expectedBags = 105;
+            const expectedKilos = 1826;
+            const expectedRevenue = 63643;
+
+            const diffBags = ((totalBags - expectedBags) / expectedBags * 100).toFixed(1);
+            const diffKilos = ((totalKilos - expectedKilos) / expectedKilos * 100).toFixed(1);
+            const diffRevenue = ((totalRevenue - expectedRevenue) / expectedRevenue * 100).toFixed(1);
+
+            const statsHTML = `
+                <div class="stats">
+                    <div class="stat-card" style="border-left-color: ${Math.abs(diffBags) < 5 ? '#059669' : '#dc2626'}">
+                        <div class="stat-label">Diferencia Bolsas</div>
+                        <div class="stat-value">${diffBags}%</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: ${Math.abs(diffKilos) < 5 ? '#059669' : '#dc2626'}">
+                        <div class="stat-label">Diferencia Kilos</div>
+                        <div class="stat-value">${diffKilos}%</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: ${Math.abs(diffRevenue) < 5 ? '#059669' : '#dc2626'}">
+                        <div class="stat-label">Diferencia Ventas</div>
+                        <div class="stat-value">${diffRevenue}%</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('enero2025Stats').innerHTML = statsHTML;
+
+            // Llenar tabla
+            const tbody = document.getElementById('ordersBody');
+            tbody.innerHTML = '';
+            
+            enero2025.forEach(order => {
+                const pricePerKg = parseFloat(order.total_kilos) > 0 ? 
+                    parseFloat(order.total_price) / parseFloat(order.total_kilos) : 0;
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${order.order_name || order.order_id}</td>
+                    <td>${order.created_at ? new Date(order.created_at).toLocaleDateString('es-MX') : 'N/A'}</td>
+                    <td>${order.month_key || 'N/A'}</td>
+                    <td>${parseFloat(order.total_bags || 0).toFixed(0)}</td>
+                    <td>${parseFloat(order.total_kilos || 0).toFixed(0)}</td>
+                    <td>$${parseFloat(order.total_price || 0).toFixed(2)}</td>
+                    <td>$${pricePerKg.toFixed(2)}</td>
+                    <td>${order.customer_email || 'N/A'}</td>
+                `;
+            });
+
+            // Análisis de duplicados
+            const orderIds = enero2025.map(o => o.order_id);
+            const duplicates = orderIds.filter((id, index) => orderIds.indexOf(id) !== index);
+            
+            if (duplicates.length > 0) {
+                document.getElementById('duplicatesAnalysis').innerHTML = `
+                    <div class="error">
+                        ⚠️ Se encontraron ${duplicates.length} órdenes duplicadas:<br>
+                        ${[...new Set(duplicates)].join(', ')}
+                    </div>
+                `;
+            } else {
+                document.getElementById('duplicatesAnalysis').innerHTML = `
+                    <div class="success">
+                        ✅ No se encontraron duplicados
+                    </div>
+                `;
+            }
+
+            // Mostrar datos raw
+            document.getElementById('rawData').textContent = JSON.stringify(enero2025.slice(0, 5), null, 2);
+        }
+
+        function exportarCSV() {
+            if (ordersData.length === 0) {
+                alert('Primero carga los datos');
+                return;
+            }
+
+            const enero2025 = ordersData.filter(order => {
+                const monthKey = order.month_key || '';
+                return monthKey === '2025-01';
+            });
+
+            const headers = ['order_id', 'order_name', 'created_at', 'month_key', 'total_bags', 'total_kilos', 'total_price', 'customer_email'];
+            const csv = [
+                headers.join(','),
+                ...enero2025.map(order => headers.map(h => order[h] || '').join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'enero-2025-diagnostico.csv';
+            a.click();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Duplicados - K-mita</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .button:hover {
+            background: #5568d3;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-value.warning {
+            color: #f59e0b;
+        }
+
+        .stat-value.error {
+            color: #ef4444;
+        }
+
+        .stat-value.success {
+            color: #10b981;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: white;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f3f4f6;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .duplicate-row {
+            background: #fef2f2;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+
+        .alert.warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico de Duplicados - K-mita Analytics</h1>
+        <p class="subtitle">Herramienta para detectar y analizar datos duplicados en Google Sheets</p>
+
+        <div>
+            <button class="button" onclick="analizarDatos()">🔍 Analizar Datos</button>
+            <button class="button" onclick="limpiarResultados()">🗑️ Limpiar</button>
+        </div>
+
+        <div id="status"></div>
+        <div id="results"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        let ordersData = [];
+        let customersData = [];
+
+        function mostrarEstado(mensaje, tipo = 'loading') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${tipo}`;
+            statusDiv.textContent = mensaje;
+            statusDiv.style.display = 'block';
+        }
+
+        function limpiarResultados() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('status').style.display = 'none';
+        }
+
+        async function analizarDatos() {
+            limpiarResultados();
+            mostrarEstado('🔄 Cargando datos de Google Sheets...', 'loading');
+
+            try {
+                // Cargar datos
+                const ordersURL = `https://docs.google.com/spreadsheets/d/${CONFIG.GOOGLE_SHEETS.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CONFIG.GOOGLE_SHEETS.ORDERS_SHEET)}`;
+
+                const response = await fetch(ordersURL);
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+
+                const csvText = await response.text();
+                ordersData = parseCSV(csvText);
+
+                mostrarEstado('✅ Datos cargados. Analizando...', 'success');
+
+                // Analizar duplicados
+                const analisis = analizarDuplicados(ordersData);
+                mostrarResultados(analisis);
+
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarEstado(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function parseCSV(csvText) {
+            if (!csvText || csvText.trim() === '') return [];
+
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length === 0) return [];
+
+            function parseCSVLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            }
+
+            const headers = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length > 0 && values.some(v => v !== '')) {
+                    const rowData = {};
+                    headers.forEach((header, index) => {
+                        rowData[header] = values[index] || '';
+                    });
+                    rowData._rowNumber = i + 1;
+                    data.push(rowData);
+                }
+            }
+
+            return data;
+        }
+
+        function analizarDuplicados(data) {
+            const analisis = {
+                totalFilas: data.length,
+                duplicadosPorOrderId: {},
+                duplicadosPorOrderName: {},
+                duplicadosExactos: [],
+                estadisticasPorMes: {},
+                ordenesUnicas: 0,
+                duplicadosEncontrados: 0
+            };
+
+            // Analizar por order_id
+            const orderIdMap = new Map();
+            const orderNameMap = new Map();
+            const exactMap = new Map();
+
+            data.forEach((row, index) => {
+                const orderId = row.order_id || row.order_name || `row_${index}`;
+                const orderName = row.order_name || '';
+                const createdAt = row.created_at || '';
+                const month = createdAt ? createdAt.substring(0, 7) : 'Sin fecha';
+
+                // Analizar por order_id
+                if (orderId) {
+                    if (!orderIdMap.has(orderId)) {
+                        orderIdMap.set(orderId, []);
+                    }
+                    orderIdMap.get(orderId).push({
+                        rowNumber: row._rowNumber,
+                        order_name: orderName,
+                        created_at: createdAt,
+                        total_price: row.total_price,
+                        total_kilos: row.total_kilos,
+                        shipping_province: row.shipping_province
+                    });
+                }
+
+                // Analizar por order_name
+                if (orderName) {
+                    if (!orderNameMap.has(orderName)) {
+                        orderNameMap.set(orderName, []);
+                    }
+                    orderNameMap.get(orderName).push({
+                        rowNumber: row._rowNumber,
+                        order_id: orderId,
+                        created_at: createdAt
+                    });
+                }
+
+                // Crear firma única para detectar duplicados exactos
+                const signature = `${orderId}|${orderName}|${createdAt}|${row.total_price}`;
+                if (!exactMap.has(signature)) {
+                    exactMap.set(signature, []);
+                }
+                exactMap.get(signature).push(row._rowNumber);
+
+                // Estadísticas por mes
+                if (!analisis.estadisticasPorMes[month]) {
+                    analisis.estadisticasPorMes[month] = {
+                        ordenes: 0,
+                        kilos: 0,
+                        revenue: 0,
+                        orderIds: new Set()
+                    };
+                }
+                analisis.estadisticasPorMes[month].ordenes++;
+                analisis.estadisticasPorMes[month].kilos += parseFloat(row.total_kilos || 0);
+                analisis.estadisticasPorMes[month].revenue += parseFloat(row.total_price || 0);
+                analisis.estadisticasPorMes[month].orderIds.add(orderId);
+            });
+
+            // Identificar duplicados por order_id
+            orderIdMap.forEach((rows, orderId) => {
+                if (rows.length > 1) {
+                    analisis.duplicadosPorOrderId[orderId] = rows;
+                    analisis.duplicadosEncontrados += rows.length - 1;
+                }
+            });
+
+            // Identificar duplicados por order_name
+            orderNameMap.forEach((rows, orderName) => {
+                if (rows.length > 1) {
+                    analisis.duplicadosPorOrderName[orderName] = rows;
+                }
+            });
+
+            // Identificar duplicados exactos
+            exactMap.forEach((rows, signature) => {
+                if (rows.length > 1) {
+                    analisis.duplicadosExactos.push({
+                        signature,
+                        rows
+                    });
+                }
+            });
+
+            analisis.ordenesUnicas = orderIdMap.size;
+
+            return analisis;
+        }
+
+        function mostrarResultados(analisis) {
+            const resultsDiv = document.getElementById('results');
+
+            let html = '<div class="results">';
+
+            // Resumen general
+            html += '<div class="result-section">';
+            html += '<h2>📊 Resumen General</h2>';
+            html += '<div class="stat-grid">';
+            html += `<div class="stat-card">
+                <div class="stat-label">Total de Filas</div>
+                <div class="stat-value">${analisis.totalFilas}</div>
+            </div>`;
+            html += `<div class="stat-card">
+                <div class="stat-label">Órdenes Únicas</div>
+                <div class="stat-value success">${analisis.ordenesUnicas}</div>
+            </div>`;
+            html += `<div class="stat-card">
+                <div class="stat-label">Duplicados Encontrados</div>
+                <div class="stat-value ${analisis.duplicadosEncontrados > 0 ? 'error' : 'success'}">${analisis.duplicadosEncontrados}</div>
+            </div>`;
+            html += `<div class="stat-card">
+                <div class="stat-label">Duplicados Exactos</div>
+                <div class="stat-value ${analisis.duplicadosExactos.length > 0 ? 'warning' : 'success'}">${analisis.duplicadosExactos.length}</div>
+            </div>`;
+            html += '</div>';
+            html += '</div>';
+
+            // Estadísticas por mes
+            html += '<div class="result-section">';
+            html += '<h2>📅 Estadísticas por Mes</h2>';
+            html += '<table>';
+            html += '<thead><tr><th>Mes</th><th>Filas Totales</th><th>Órdenes Únicas</th><th>Kilos</th><th>Ingresos</th><th>Diferencia</th></tr></thead>';
+            html += '<tbody>';
+            Object.entries(analisis.estadisticasPorMes).sort().forEach(([month, stats]) => {
+                const diferencia = stats.ordenes - stats.orderIds.size;
+                const rowClass = diferencia > 0 ? 'duplicate-row' : '';
+                html += `<tr class="${rowClass}">
+                    <td><strong>${month}</strong></td>
+                    <td>${stats.ordenes}</td>
+                    <td>${stats.orderIds.size}</td>
+                    <td>${stats.kilos.toFixed(2)} kg</td>
+                    <td>$${stats.revenue.toFixed(2)}</td>
+                    <td><strong>${diferencia > 0 ? '⚠️ +' + diferencia : '✅ 0'}</strong></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+
+            if (Object.values(analisis.estadisticasPorMes).some(s => s.ordenes > s.orderIds.size)) {
+                html += '<div class="alert warning">';
+                html += '<strong>⚠️ Advertencia:</strong> Se detectaron meses con más filas que órdenes únicas. Esto indica duplicados.';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Duplicados por order_id
+            if (Object.keys(analisis.duplicadosPorOrderId).length > 0) {
+                html += '<div class="result-section">';
+                html += '<h2>🔴 Duplicados por Order ID</h2>';
+                html += '<div class="alert warning">';
+                html += `<strong>Se encontraron ${Object.keys(analisis.duplicadosPorOrderId).length} order_id duplicados</strong>`;
+                html += '</div>';
+                html += '<table>';
+                html += '<thead><tr><th>Order ID</th><th>Veces Repetido</th><th>Filas</th><th>Detalles</th></tr></thead>';
+                html += '<tbody>';
+                Object.entries(analisis.duplicadosPorOrderId).slice(0, 20).forEach(([orderId, rows]) => {
+                    html += `<tr class="duplicate-row">
+                        <td><strong>${orderId}</strong></td>
+                        <td>${rows.length}</td>
+                        <td>${rows.map(r => r.rowNumber).join(', ')}</td>
+                        <td>${rows[0].total_price} | ${rows[0].total_kilos}kg | ${rows[0].shipping_province}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                if (Object.keys(analisis.duplicadosPorOrderId).length > 20) {
+                    html += `<p style="margin-top: 10px; color: #666;">Mostrando 20 de ${Object.keys(analisis.duplicadosPorOrderId).length} duplicados...</p>`;
+                }
+                html += '</div>';
+            } else {
+                html += '<div class="result-section">';
+                html += '<h2>✅ Sin Duplicados por Order ID</h2>';
+                html += '<div class="alert info">No se encontraron order_id duplicados. ¡Excelente!</div>';
+                html += '</div>';
+            }
+
+            // Recomendaciones
+            html += '<div class="result-section">';
+            html += '<h2>💡 Recomendaciones</h2>';
+            if (analisis.duplicadosEncontrados > 0) {
+                html += '<div class="alert warning">';
+                html += '<strong>Acción Requerida:</strong><br>';
+                html += '1. Revisa tu Google Sheets y elimina las filas duplicadas<br>';
+                html += '2. Usa la columna "Filas" en la tabla de arriba para identificar qué filas eliminar<br>';
+                html += '3. El dashboard ya está configurado para ignorar duplicados automáticamente<br>';
+                html += '4. Después de limpiar, vuelve a ejecutar este diagnóstico';
+                html += '</div>';
+            } else {
+                html += '<div class="alert info">';
+                html += '<strong>✅ Todo está bien:</strong> No se detectaron duplicados en tus datos.';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,51 @@
+========================================
+INSTRUCCIONES PARA INICIAR EL SERVIDOR
+========================================
+
+PASO 1: Abrir PowerShell o CMD
+-------------------------------
+1. Presiona la tecla Windows
+2. Escribe "cmd" o "powershell"
+3. Presiona Enter
+
+PASO 2: Navegar a la carpeta k-mitadash
+----------------------------------------
+Escribe este comando (ajusta la ruta según donde esté tu carpeta):
+
+cd ruta\a\tu\carpeta\k-mitadash
+
+Por ejemplo:
+cd C:\Users\TuUsuario\Desktop\k-mitadash
+
+PASO 3: Iniciar el servidor
+----------------------------
+Escribe este comando:
+
+python -m http.server 8000
+
+PASO 4: Abrir en el navegador
+------------------------------
+Abre tu navegador y ve a:
+
+http://localhost:8000/diagnostico-duplicados.html
+
+Para el dashboard principal:
+http://localhost:8000/index.html
+
+Para el reporte mensual:
+http://localhost:8000/monthly-report.html
+
+PASO 5: Detener el servidor
+----------------------------
+Cuando termines, presiona Ctrl+C en la ventana de CMD/PowerShell
+
+========================================
+ALTERNATIVA: Usar el archivo .bat
+========================================
+
+También puedes hacer doble clic en el archivo:
+iniciar-servidor.bat
+
+Esto iniciará el servidor automáticamente.
+
+========================================

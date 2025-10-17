@@ -359,9 +359,49 @@ async function loadShopifyData() {
             customersData = rawCustomers;
         }
 
+        // VALIDACIÓN ADICIONAL: Eliminar duplicados por order_id
+        const uniqueOrderIds = new Set();
+        const ordersBeforeDedup = ordersData.length;
+        ordersData = ordersData.filter(order => {
+            const orderId = order.order_id || order.id;
+            if (!orderId || uniqueOrderIds.has(orderId)) {
+                return false;
+            }
+            uniqueOrderIds.add(orderId);
+            return true;
+        });
+        
+        if (ordersBeforeDedup !== ordersData.length) {
+            console.warn(`⚠️ [DEDUP] Se removieron ${ordersBeforeDedup - ordersData.length} órdenes duplicadas`);
+        }
+
         console.log('Datos K-mita procesados:', {
             ordersCount: ordersData.length,
             customersCount: customersData.length
+        });
+
+        // LOG DETALLADO: Mostrar resumen de datos por mes
+        const ordersByMonth = {};
+        ordersData.forEach(order => {
+            const monthKey = order.month_key || 'Sin mes';
+            if (!ordersByMonth[monthKey]) {
+                ordersByMonth[monthKey] = {
+                    count: 0,
+                    totalBags: 0,
+                    totalKilos: 0,
+                    totalRevenue: 0
+                };
+            }
+            ordersByMonth[monthKey].count++;
+            ordersByMonth[monthKey].totalBags += parseFloat(order.total_bags || 0);
+            ordersByMonth[monthKey].totalKilos += parseFloat(order.total_kilos || 0);
+            ordersByMonth[monthKey].totalRevenue += parseFloat(order.total_price || 0);
+        });
+
+        console.log('📊 [RESUMEN POR MES] Datos cargados:');
+        Object.keys(ordersByMonth).sort().forEach(month => {
+            const data = ordersByMonth[month];
+            console.log(`  ${month}: ${data.count} órdenes, ${data.totalBags.toFixed(0)} bolsas, ${data.totalKilos.toFixed(0)} kg, $${data.totalRevenue.toFixed(2)}`);
         });
 
         isDataLoaded = true;
@@ -458,6 +498,7 @@ function parseGoogleSheetsCSVResponse(csvText) {
     const headers = parseCSVLine(lines[0]);
     const data = [];
     const seenIds = new Set(); // Para evitar duplicados
+    let duplicatesRemoved = 0;
 
     for (let i = 1; i < lines.length; i++) {
         const values = parseCSVLine(lines[i]);
@@ -467,16 +508,22 @@ function parseGoogleSheetsCSVResponse(csvText) {
                 rowData[header] = values[index] || '';
             });
 
-            // Evitar duplicados basados en el primer campo (ID)
-            const id = values[0];
-            if (id && !seenIds.has(id)) {
-                seenIds.add(id);
+            // Evitar duplicados basados en order_id (más robusto)
+            const orderId = rowData.order_id || rowData.id || values[0];
+            if (orderId && !seenIds.has(orderId)) {
+                seenIds.add(orderId);
                 data.push(rowData);
+            } else if (orderId) {
+                duplicatesRemoved++;
+                console.warn(`[CSV Parser] Duplicado removido: order_id=${orderId}`);
             }
         }
     }
 
-    console.log(`[CSV Parser] Parseadas ${data.length} filas únicas de ${lines.length - 1} totales`);
+    console.log(`[CSV Parser] ✅ Parseadas ${data.length} filas únicas de ${lines.length - 1} totales`);
+    if (duplicatesRemoved > 0) {
+        console.warn(`[CSV Parser] ⚠️ Se removieron ${duplicatesRemoved} duplicados`);
+    }
     return data;
 }
 
@@ -523,6 +570,8 @@ function calculateFulfillmentDays(createdAt, processedAt) {
 function updateKmitaKPIs() {
     const filteredOrders = filterDataByPeriod(ordersData);
 
+    console.log(`📊 [KPIs] Calculando KPIs con ${filteredOrders.length} órdenes (filtro: ${currentPeriod})`);
+
     const totalRevenue = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
     const totalOrders = filteredOrders.length;
     const uniqueCustomers = new Set(filteredOrders.map(order => order.customer_email)).size;
@@ -531,6 +580,13 @@ function updateKmitaKPIs() {
     // Calcular métricas K-mita
     const totalKilos = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_kilos || 0), 0);
     const totalBags = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_bags || 0), 0);
+
+    console.log(`💰 [KPIs] Total Revenue: $${totalRevenue.toFixed(2)}`);
+    console.log(`📦 [KPIs] Total Orders: ${totalOrders}`);
+    console.log(`👥 [KPIs] Unique Customers: ${uniqueCustomers}`);
+    console.log(`🛍️ [KPIs] Total Bags: ${totalBags.toFixed(0)}`);
+    console.log(`⚖️ [KPIs] Total Kilos: ${totalKilos.toFixed(0)}`);
+    console.log(`💵 [KPIs] Avg Order Value: $${avgOrderValue.toFixed(2)}`);
 
     // Calcular precio promedio por kilo
     const validKiloOrders = filteredOrders.filter(order =>
