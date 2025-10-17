@@ -339,10 +339,27 @@ async function loadShopifyData() {
         const ordersCSV = await ordersResponse.text();
         const customersCSV = await customersResponse.text();
 
-        ordersData = parseGoogleSheetsCSVResponse(ordersCSV);
-        customersData = parseGoogleSheetsCSVResponse(customersCSV);
+        const rawOrders = parseGoogleSheetsCSVResponse(ordersCSV);
+        const rawCustomers = parseGoogleSheetsCSVResponse(customersCSV);
 
-        console.log('Datos K-mita cargados:', {
+        console.log('Datos K-mita cargados (raw):', {
+            ordersCount: rawOrders.length,
+            customersCount: rawCustomers.length
+        });
+
+        // Adaptar datos usando los adaptadores (si están disponibles)
+        if (typeof window.adaptOrders === 'function' && typeof window.adaptCustomers === 'function') {
+            console.log('🔧 [ADAPTER] Adaptando datos desde estructura kmita...');
+            ordersData = window.adaptOrders(rawOrders);
+            customersData = window.adaptCustomers(rawCustomers);
+            console.log('✅ [ADAPTER] Datos adaptados correctamente');
+        } else {
+            console.warn('⚠️ [ADAPTER] Adaptadores no disponibles, usando datos raw');
+            ordersData = rawOrders;
+            customersData = rawCustomers;
+        }
+
+        console.log('Datos K-mita procesados:', {
             ordersCount: ordersData.length,
             customersCount: customersData.length
         });

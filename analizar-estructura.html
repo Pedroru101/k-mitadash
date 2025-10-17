@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizar Estructura de Datos - K-mita</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        .field-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .field {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .new-field {
+            background: #d4edda;
+            border-color: #28a745;
+            font-weight: bold;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Análisis de Estructura de Datos - Google Sheets</h1>
+        
+        <button onclick="analizarEstructura()">🔍 Analizar Estructura Actual</button>
+        <button onclick="compararConAnterior()">⚖️ Comparar con Estructura Anterior</button>
+        <button onclick="generarCodigo()">💻 Generar Código de Integración</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const SHEET_ID = '1fWJxqNKv7Fm0uldTh7RhxwgVXpdWnp7dR4HsXn8bfZ0';
+        
+        // Campos anteriores (para comparación)
+        const CAMPOS_ANTERIORES = {
+            orders: [
+                'order_id', 'order_name', 'created_at', 'financial_status',
+                'fulfillment_status', 'fulfilled_at', 'closed_at', 'fulfillment_days',
+                'total_price', 'total_discounts', 'total_bags', 'total_kilos',
+                'customer_id', 'customer_email', 'shipping_city', 'shipping_province',
+                'payment_method', 'month_key'
+            ],
+            customers: [
+                'customer_id', 'email', 'first_name', 'last_name', 'orders_count',
+                'total_spent', 'customer_segment', 'address_city', 'address_province',
+                'accepts_marketing'
+            ]
+        };
+
+        async function analizarEstructura() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>🔄 Analizando estructura...</h2>';
+            
+            let html = '';
+            
+            try {
+                // Analizar Orders_Data
+                html += '<div class="section success">';
+                html += '<h2>📦 Orders_Data</h2>';
+                
+                const ordersUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=Orders_Data`;
+                const ordersResponse = await fetch(ordersUrl);
+                
+                if (!ordersResponse.ok) {
+                    throw new Error(`Error ${ordersResponse.status}: No se puede acceder a Orders_Data`);
+                }
+                
+                const ordersCSV = await ordersResponse.text();
+                const ordersLines = ordersCSV.split('\\n').filter(l => l.trim());
+                const ordersHeaders = ordersLines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                
+                html += `<div class="stats">`;
+                html += `<div class="stat-card"><div class="stat-value">${ordersLines.length - 1}</div><div class="stat-label">Órdenes</div></div>`;
+                html += `<div class="stat-card"><div class="stat-value">${ordersHeaders.length}</div><div class="stat-label">Campos</div></div>`;
+                html += `</div>`;
+                
+                html += '<h3>Campos Encontrados:</h3>';
+                html += '<div class="field-list">';
+                ordersHeaders.forEach(field => {
+                    const isNew = !CAMPOS_ANTERIORES.orders.includes(field);
+                    html += `<div class="field ${isNew ? 'new-field' : ''}">${field}${isNew ? ' 🆕' : ''}</div>`;
+                });
+                html += '</div>';
+                
+                // Mostrar ejemplo de datos
+                html += '<h3>Ejemplo de Datos (Primera Orden):</h3>';
+                if (ordersLines.length > 1) {
+                    const firstOrder = ordersLines[1].split(',');
+                    html += '<pre>';
+                    ordersHeaders.forEach((header, index) => {
+                        html += `${header}: ${firstOrder[index] || 'N/A'}\\n`;
+                    });
+                    html += '</pre>';
+                }
+                
+                html += '</div>';
+                
+                // Analizar Customers_Data
+                html += '<div class="section success">';
+                html += '<h2>👥 Customers_Data</h2>';
+                
+                const customersUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=Customers_Data`;
+                const customersResponse = await fetch(customersUrl);
+                
+                if (!customersResponse.ok) {
+                    throw new Error(`Error ${customersResponse.status}: No se puede acceder a Customers_Data`);
+                }
+                
+                const customersCSV = await customersResponse.text();
+                const customersLines = customersCSV.split('\\n').filter(l => l.trim());
+                const customersHeaders = customersLines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                
+                html += `<div class="stats">`;
+                html += `<div class="stat-card"><div class="stat-value">${customersLines.length - 1}</div><div class="stat-label">Clientes</div></div>`;
+                html += `<div class="stat-card"><div class="stat-value">${customersHeaders.length}</div><div class="stat-label">Campos</div></div>`;
+                html += `</div>`;
+                
+                html += '<h3>Campos Encontrados:</h3>';
+                html += '<div class="field-list">';
+                customersHeaders.forEach(field => {
+                    const isNew = !CAMPOS_ANTERIORES.customers.includes(field);
+                    html += `<div class="field ${isNew ? 'new-field' : ''}">${field}${isNew ? ' 🆕' : ''}</div>`;
+                });
+                html += '</div>';
+                
+                // Mostrar ejemplo de datos
+                html += '<h3>Ejemplo de Datos (Primer Cliente):</h3>';
+                if (customersLines.length > 1) {
+                    const firstCustomer = customersLines[1].split(',');
+                    html += '<pre>';
+                    customersHeaders.forEach((header, index) => {
+                        html += `${header}: ${firstCustomer[index] || 'N/A'}\\n`;
+                    });
+                    html += '</pre>';
+                }
+                
+                html += '</div>';
+                
+                // Guardar para otras funciones
+                window.currentStructure = {
+                    orders: ordersHeaders,
+                    customers: customersHeaders
+                };
+                
+            } catch (error) {
+                html += `<div class="section" style="border-left-color: #dc3545; background: #f8d7da;">`;
+                html += `<h3>❌ Error</h3>`;
+                html += `<p>${error.message}</p>`;
+                html += `</div>`;
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function compararConAnterior() {
+            if (!window.currentStructure) {
+                alert('Primero ejecuta "Analizar Estructura Actual"');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('results');
+            let html = '<div class="section"><h2>⚖️ Comparación de Estructuras</h2>';
+            
+            // Comparar Orders
+            html += '<h3>📦 Orders_Data - Campos Nuevos:</h3>';
+            html += '<div class="field-list">';
+            const newOrderFields = window.currentStructure.orders.filter(f => !CAMPOS_ANTERIORES.orders.includes(f));
+            if (newOrderFields.length > 0) {
+                newOrderFields.forEach(field => {
+                    html += `<div class="field new-field">🆕 ${field}</div>`;
+                });
+            } else {
+                html += '<p>No hay campos nuevos</p>';
+            }
+            html += '</div>';
+            
+            // Comparar Customers
+            html += '<h3>👥 Customers_Data - Campos Nuevos:</h3>';
+            html += '<div class="field-list">';
+            const newCustomerFields = window.currentStructure.customers.filter(f => !CAMPOS_ANTERIORES.customers.includes(f));
+            if (newCustomerFields.length > 0) {
+                newCustomerFields.forEach(field => {
+                    html += `<div class="field new-field">🆕 ${field}</div>`;
+                });
+            } else {
+                html += '<p>No hay campos nuevos</p>';
+            }
+            html += '</div>';
+            
+            html += '</div>';
+            resultsDiv.innerHTML += html;
+        }
+
+        function generarCodigo() {
+            if (!window.currentStructure) {
+                alert('Primero ejecuta "Analizar Estructura Actual"');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('results');
+            let html = '<div class="section"><h2>💻 Código de Integración Generado</h2>';
+            
+            html += '<h3>Campos para Procesar:</h3>';
+            html += '<pre>';
+            html += '// Orders_Data Fields\\n';
+            html += 'const ORDER_FIELDS = [\\n';
+            window.currentStructure.orders.forEach(field => {
+                html += `  '${field}',\\n`;
+            });
+            html += '];\\n\\n';
+            
+            html += '// Customers_Data Fields\\n';
+            html += 'const CUSTOMER_FIELDS = [\\n';
+            window.currentStructure.customers.forEach(field => {
+                html += `  '${field}',\\n`;
+            });
+            html += '];';
+            html += '</pre>';
+            
+            html += '</div>';
+            resultsDiv.innerHTML += html;
+        }
+
+        // Auto-ejecutar al cargar
+        window.addEventListener('load', () => {
+            setTimeout(analizarEstructura, 500);
+        });
+    </script>
+</body>
+</html>

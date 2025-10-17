@@ -1,6 +1,6 @@
 /**
  * ========================================
- * SHOPIFY TO GOOGLE SHEETS SYNC - VERSIÓN DEFINITIVA
+ * SHOPIFY TO GOOGLE SHEETS SYNC 
  * Sincroniza órdenes y clientes desde Shopify
  * SOLO actualiza o agrega, NUNCA duplica ni pisa datos
  * ========================================
@@ -133,7 +133,7 @@ function generateMonthlyDateRanges() {
 // FUNCIONES DE OBTENCIÓN DE DATOS (API)
 // ============================================
 
-function fetchAllPaginatedResults(initialUrl, config) {
+function fetchAllPaginatedResults(initialUrl, config, resourceType = 'orders') {
     let allItems = [];
     let nextUrl = initialUrl;
     let pageCount = 0;
@@ -146,6 +146,12 @@ function fetchAllPaginatedResults(initialUrl, config) {
         },
         'muteHttpExceptions': true
     };
+
+    // Espera inicial antes de la primera página (como en n8n)
+    if (resourceType === 'orders') {
+        Logger.log(`  Esperando 3 segundos antes de obtener órdenes (rate limit)...`);
+        Utilities.sleep(3000);
+    }
 
     while (nextUrl) {
         pageCount++;
@@ -166,40 +172,51 @@ function fetchAllPaginatedResults(initialUrl, config) {
             if (data[resourceKey] && Array.isArray(data[resourceKey]) && data[resourceKey].length > 0) {
                 allItems = allItems.concat(data[resourceKey]);
                 Logger.log(`  → ${data[resourceKey].length} items obtenidos (total acumulado: ${allItems.length})`);
+            } else {
+                Logger.log(`  → Página vacía o sin datos`);
             }
 
-            const linkHeader = response.getHeaders()['Link'] || response.getHeaders()['link'];
+            // Buscar Link header para paginación (igual que n8n)
+            const headers = response.getHeaders();
+            const linkHeader = headers['Link'] || headers['link'] || headers['LINK'];
             nextUrl = null;
 
-            if (linkHeader) {
+            if (linkHeader && typeof linkHeader === 'string') {
                 const links = linkHeader.split(',');
-                const nextLink = links.find(link => link.includes('rel="next"'));
-                if (nextLink) {
-                    const match = nextLink.match(/<([^>]+)>/);
+                for (const link of links) {
+                    const match = link.match(/<([^>]+)>\s*;\s*rel="next"/i);
                     if (match) {
                         nextUrl = match[1];
+                        Logger.log(`  → Hay más páginas. Siguiente URL encontrada.`);
+                        break;
                     }
                 }
             }
 
+            // Espera entre páginas (como en n8n: 0.5s para órdenes, 0.5s para clientes)
             if (nextUrl) {
+                Logger.log(`  Esperando 500ms antes de la siguiente página...`);
                 Utilities.sleep(500);
             }
 
         } catch (e) {
             Logger.log(`  ERROR al obtener página: ${e.message}`);
+            Logger.log(`  Stack: ${e.stack}`);
             break;
         }
     }
 
-    Logger.log(`  Total de items obtenidos: ${allItems.length}`);
+    Logger.log(`  ✓ Total de items obtenidos: ${allItems.length} en ${pageCount} página(s)`);
     return allItems;
 }
 
 function fetchAndProcessOrdersForMonth(config, range) {
     try {
-        const initialUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/orders.json?status=any&limit=250&created_at_min=${range.start}&created_at_max=${range.end}`;
-        const orders = fetchAllPaginatedResults(initialUrl, config);
+        // Parámetros idénticos a n8n: status=any, financial_status=any, limit=50
+        const initialUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/orders.json?status=any&financial_status=any&limit=50&created_at_min=${range.start}&created_at_max=${range.end}`;
+
+        Logger.log(`  URL: ${initialUrl.substring(0, 100)}...`);
+        const orders = fetchAllPaginatedResults(initialUrl, config, 'orders');
 
         if (orders.length === 0) {
             Logger.log(`  No se encontraron órdenes para ${range.monthName}.`);
@@ -220,9 +237,16 @@ function fetchAndProcessOrdersForMonth(config, range) {
 
 function fetchAndProcessCustomers(config) {
     try {
+        // Espera de 2 segundos antes de obtener clientes (como en n8n)
+        Logger.log('  Esperando 2 segundos antes de obtener clientes...');
+        Utilities.sleep(2000);
+
         const startDate = '2025-01-01T00:00:00Z';
+        // Límite de 250 como en n8n para clientes
         const initialUrl = `https://${config.storeName}.myshopify.com/admin/api/${config.apiVersion}/customers.json?limit=250&created_at_min=${startDate}`;
-        const customers = fetchAllPaginatedResults(initialUrl, config);
+
+        Logger.log(`  URL: ${initialUrl.substring(0, 100)}...`);
+        const customers = fetchAllPaginatedResults(initialUrl, config, 'customers');
 
         if (customers.length === 0) {
             Logger.log('  No se encontraron nuevos clientes.');
@@ -246,29 +270,38 @@ function fetchAndProcessCustomers(config) {
 // ============================================
 
 function processShopifyOrders(orders, monthKey) {
+    // Headers idénticos a n8n
     const headers = [
         'order_id',
         'order_name',
+        'order_number',
         'created_at',
+        'processed_at',
+        'month_key',
         'financial_status',
         'fulfillment_status',
-        'fulfilled_at',
-        'closed_at',
-        'fulfillment_days',
+        'currency',
         'total_price',
+        'subtotal_price',
+        'total_tax',
         'total_discounts',
         'total_bags',
         'total_kilos',
         'customer_id',
         'customer_email',
+        'customer_first_name',
+        'customer_last_name',
         'shipping_city',
         'shipping_province',
-        'payment_method',
-        'month_key'
+        'shipping_country',
+        'line_items_count',
+        'product_titles'
     ];
 
     const dataRows = orders.map(order => {
         const lineItems = order.line_items || [];
+
+        // Calcular total de bolsas y kilos (igual que n8n)
         const totalBags = lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
         const totalKilos = lineItems.reduce((sum, item) => {
             const grams = item.grams || 0;
@@ -276,57 +309,43 @@ function processShopifyOrders(orders, monthKey) {
             return sum + (grams * quantity / 1000);
         }, 0);
 
-        // Calcular fecha de fulfillment y días
-        let fulfilledAt = '';
-        let fulfillmentDays = '';
+        // Extraer títulos de productos (igual que n8n)
+        const productTitles = lineItems
+            .map(item => item.title)
+            .filter(title => title)
+            .join(' | ');
 
-        // Intentar obtener la fecha de fulfillment de diferentes fuentes
-        if (order.fulfillments && order.fulfillments.length > 0) {
-            fulfilledAt = order.fulfillments[0].created_at || '';
-        } else if (order.closed_at) {
-            fulfilledAt = order.closed_at;
-        }
-
-        // Calcular días de fulfillment si tenemos ambas fechas
-        if (order.created_at && fulfilledAt) {
-            try {
-                const createdDate = new Date(order.created_at);
-                const fulfilledDate = new Date(fulfilledAt);
-                const diffTime = fulfilledDate - createdDate;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                fulfillmentDays = diffDays >= 0 ? diffDays : '';
-            } catch (e) {
-                fulfillmentDays = '';
-            }
-        }
-
-        // Extraer método de pago
-        let paymentMethod = 'No especificado';
-        if (order.payment_gateway_names && order.payment_gateway_names.length > 0) {
-            paymentMethod = order.payment_gateway_names[0];
-        } else if (order.gateway) {
-            paymentMethod = order.gateway;
-        }
+        // Función auxiliar para números seguros
+        const safeNumber = (value) => {
+            const num = parseFloat(value || 0);
+            return isNaN(num) ? 0 : num;
+        };
 
         return [
             order.id ? String(order.id) : '',
             order.name || '',
+            order.order_number || '',
             order.created_at || '',
+            order.processed_at || '',
+            monthKey,
             order.financial_status || '',
             order.fulfillment_status || '',
-            fulfilledAt,
-            order.closed_at || '',
-            fulfillmentDays,
-            parseFloat(order.total_price || 0),
-            parseFloat(order.total_discounts || 0),
+            order.currency || '',
+            safeNumber(order.total_price),
+            safeNumber(order.subtotal_price),
+            safeNumber(order.total_tax),
+            safeNumber(order.total_discounts),
             totalBags,
             Math.round(totalKilos * 100) / 100,
             order.customer && order.customer.id ? String(order.customer.id) : '',
             order.customer && order.customer.email ? order.customer.email : '',
+            order.customer && order.customer.first_name ? order.customer.first_name : '',
+            order.customer && order.customer.last_name ? order.customer.last_name : '',
             order.shipping_address && order.shipping_address.city ? order.shipping_address.city : '',
             order.shipping_address && order.shipping_address.province ? order.shipping_address.province : '',
-            paymentMethod,
-            monthKey
+            order.shipping_address && order.shipping_address.country ? order.shipping_address.country : '',
+            lineItems.length,
+            productTitles
         ];
     });
 
@@ -334,6 +353,7 @@ function processShopifyOrders(orders, monthKey) {
 }
 
 function processShopifyCustomers(customers) {
+    // Headers idénticos a n8n
     const headers = [
         'customer_id',
         'email',
@@ -341,19 +361,51 @@ function processShopifyCustomers(customers) {
         'last_name',
         'orders_count',
         'total_spent',
+        'created_at',
+        'updated_at',
+        'days_since_creation',
+        'days_since_last_order',
+        'accepts_marketing',
+        'state',
+        'currency',
         'customer_segment',
         'address_city',
         'address_province',
-        'accepts_marketing'
+        'address_country'
     ];
 
+    const now = new Date();
+
     const dataRows = customers.map(customer => {
-        let segment = 'New';
         const ordersCount = customer.orders_count || 0;
 
-        if (ordersCount === 1) segment = 'One-time';
-        else if (ordersCount === 2) segment = 'Repeat';
-        else if (ordersCount >= 3) segment = 'Loyal';
+        // Segmentación idéntica a n8n
+        let segment = 'New';
+        if (ordersCount >= 3) segment = 'Loyal';
+        else if (ordersCount >= 2) segment = 'Repeat';
+        else if (ordersCount === 1) segment = 'One-time';
+
+        // Calcular días desde creación y última orden (igual que n8n)
+        let daysSinceCreation = null;
+        let daysSinceLastOrder = null;
+
+        if (customer.created_at) {
+            try {
+                const createdDate = new Date(customer.created_at);
+                daysSinceCreation = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+            } catch (e) {
+                daysSinceCreation = null;
+            }
+        }
+
+        if (customer.updated_at) {
+            try {
+                const updatedDate = new Date(customer.updated_at);
+                daysSinceLastOrder = Math.floor((now - updatedDate) / (1000 * 60 * 60 * 24));
+            } catch (e) {
+                daysSinceLastOrder = null;
+            }
+        }
 
         const mainAddress = (customer.addresses && customer.addresses.length > 0) ? customer.addresses[0] : {};
 
@@ -364,10 +416,17 @@ function processShopifyCustomers(customers) {
             customer.last_name || '',
             ordersCount,
             parseFloat(customer.total_spent || 0),
+            customer.created_at || '',
+            customer.updated_at || '',
+            daysSinceCreation !== null ? daysSinceCreation : '',
+            daysSinceLastOrder !== null ? daysSinceLastOrder : '',
+            customer.accepts_marketing || false,
+            customer.state || '',
+            customer.currency || '',
             segment,
             mainAddress.city || '',
             mainAddress.province || '',
-            customer.accepts_marketing ? 'Sí' : 'No'
+            mainAddress.country || ''
         ];
     });
 

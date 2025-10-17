@@ -5,8 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>K-mita Analytics Dashboard</title>
+    <!-- Configuración -->
     <script src="config.js"></script>
+    <!-- Librerías externas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Adaptadores de datos (deben cargarse ANTES del script principal) -->
+    <script src="adapter-real-data.js"></script>
+    <script src="force-real-data.js"></script>
+    <script src="fix-legend-position.js"></script>
+    <script src="verify-data-source.js"></script>
+    <!-- Estilos -->
     <link rel="stylesheet" href="shopify-analytics-styles.css">
     <link rel="icon" type="image/x-icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐈</text></svg>">

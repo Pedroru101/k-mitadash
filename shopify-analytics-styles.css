@@ -1317,3 +1317,194 @@
         font-size: 0.9rem;
     }
 }
+
+/* ═════
+══════════════════════════════════════════════════════════════════════════════ */
+/* 🍩 ESTILOS PARA GRÁFICOS DE DONA - CENTRADO Y SEPARACIÓN DE LEYENDA */
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Contenedor de gráficos de dona - más centrado */
+#customerSegmentChart,
+#paymentMethodsChart {
+    max-width: 400px !important;
+    max-height: 400px !important;
+    margin: 0 auto !important;
+}
+
+/* Contenedor del canvas para centrar mejor */
+.chart-container canvas {
+    display: block !important;
+    margin: 0 auto !important;
+}
+
+/* Ajuste específico para gráficos de segmentación y métodos de pago */
+.chart-container:has(#customerSegmentChart),
+.chart-container:has(#paymentMethodsChart) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 2rem 1.5rem !important;
+}
+
+/* Más espacio entre el gráfico y la leyenda */
+.chart-container:has(#customerSegmentChart) canvas,
+.chart-container:has(#paymentMethodsChart) canvas {
+    margin-right: 2rem !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+/* 🍩 GRÁFICOS DE DONA - LAYOUT HORIZONTAL: GRÁFICO IZQUIERDA, LEYENDA DERECHA */
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Contenedor principal - layout horizontal con gran separación */
+.chart-container:has(#customerSegmentChart),
+.chart-container:has(#paymentMethodsChart) {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 2.5rem 2rem !important;
+    gap: 5rem !important; /* 5rem = mucha separación entre gráfico y leyenda */
+}
+
+/* Canvas del gráfico - posicionado a la izquierda */
+#customerSegmentChart,
+#paymentMethodsChart {
+    max-width: 280px !important;
+    max-height: 280px !important;
+    flex-shrink: 0 !important;
+    margin-left: 2rem !important; /* Empujar un poco a la derecha desde el borde */
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+/* 🍩 GRÁFICOS DE DONA - GRÁFICO MÁS A LA DERECHA, LEYENDA SEPARADA */
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Contenedor principal - layout horizontal con separación */
+.chart-container:has(#customerSegmentChart),
+.chart-container:has(#paymentMethodsChart) {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important; /* Centrar todo el contenido */
+    padding: 2.5rem 2rem !important;
+    gap: 5rem !important; /* Gran separación entre gráfico y leyenda */
+}
+
+/* Canvas del gráfico - más hacia la derecha */
+#customerSegmentChart,
+#paymentMethodsChart {
+    max-width: 280px !important;
+    max-height: 280px !important;
+    flex-shrink: 0 !important;
+    margin-left: 6rem !important; /* Empujar el gráfico más a la derecha */
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+/* 🍩 GRÁFICOS DE DONA - TODO CENTRADO DENTRO DE LA TARJETA */
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Contenedor principal - centrar todo el contenido */
+.chart-container:has(#customerSegmentChart),
+.chart-container:has(#paymentMethodsChart) {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important; /* Centrar horizontalmente */
+    padding: 2.5rem 2rem !important;
+    gap: 4rem !important; /* Separación entre gráfico y leyenda */
+}
+
+/* Canvas del gráfico - sin margin para que se centre naturalmente */
+#customerSegmentChart,
+#paymentMethodsChart {
+    max-width: 280px !important;
+    max-height: 280px !important;
+    flex-shrink: 0 !important;
+    margin-left: 0 !important; /* Sin margen para centrado natural */
+}
+
+/* Wrapper interno para centrado perfecto */
+.chart-container:has(#customerSegmentChart) > div,
+.chart-container:has(#paymentMethodsChart) > div {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+/* 🍩 GRÁFICOS DE DONA - LEYENDA A LA DERECHA, TODO CENTRADO (OVERRIDE FINAL) */
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Resetear estilos anteriores y centrar todo */
+.chart-container:has(#customerSegmentChart),
+.chart-container:has(#paymentMethodsChart) {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 3rem 2rem !important;
+    min-height: 400px !important;
+}
+
+/* El canvas y su contenedor deben estar centrados */
+.chart-container:has(#customerSegmentChart) canvas,
+.chart-container:has(#paymentMethodsChart) canvas {
+    max-width: 100% !important;
+    max-height: 350px !important;
+    margin: 0 auto !important;
+}
+
+/* Asegurar que el wrapper de Chart.js esté centrado */
+.chart-container:has(#customerSegmentChart) > div,
+.chart-container:has(#paymentMethodsChart) > div {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+/* 📈 AGRANDAR TODOS LOS GRÁFICOS PARA LLENAR MEJOR LAS TARJETAS */
+/* ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Aumentar el tamaño de TODOS los canvas de gráficos */
+.chart-container canvas {
+    min-height: 300px !important;
+    max-height: 450px !important;
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* Gráficos de dona - más grandes */
+#customerSegmentChart,
+#paymentMethodsChart {
+    min-width: 350px !important;
+    min-height: 350px !important;
+    max-width: 450px !important;
+    max-height: 450px !important;
+}
+
+/* Gráficos de línea y barras - más grandes */
+#salesTrendChart,
+#kilosChart,
+#bagsChart,
+#topProductsChart,
+#geographicChart,
+#fulfillmentChart {
+    min-height: 350px !important;
+    max-height: 450px !important;
+}
+
+/* Ajustar padding del contenedor para dar más espacio */
+.chart-container {
+    padding: 2rem 1.5rem !important;
+    min-height: 400px !important;
+}

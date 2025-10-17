@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Campos - K-mita</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .warning { border-left-color: #ffc107; background: #fff3cd; }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 400px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #007bff;
+            color: white;
+        }
+        .empty {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .filled {
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico de Campos: Métodos de Pago y Fulfillment</h1>
+        
+        <button onclick="diagnosticar()">🚀 Ejecutar Diagnóstico</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const SHEET_ID = '1fWJxqNKv7Fm0uldTh7RhxwgVXpdWnp7dR4HsXn8bfZ0';
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length === 0) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index] ? values[index].trim().replace(/"/g, '') : '';
+                });
+                data.push(row);
+            }
+            
+            return data;
+        }
+
+        async function diagnosticar() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>🔄 Analizando datos...</h2>';
+            
+            let html = '';
+            
+            try {
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=Orders_Data`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: No se puede acceder a Orders_Data`);
+                }
+                
+                const csvText = await response.text();
+                const orders = parseCSV(csvText);
+                
+                console.log('Órdenes cargadas:', orders.length);
+                console.log('Primera orden:', orders[0]);
+                
+                // Analizar payment_method
+                html += '<div class="section">';
+                html += '<h2>💳 Análisis de payment_method</h2>';
+                
+                const paymentMethods = {};
+                let emptyPayment = 0;
+                
+                orders.forEach(order => {
+                    const method = order.payment_method || order.payment_gateway || '';
+                    if (method && method !== '') {
+                        paymentMethods[method] = (paymentMethods[method] || 0) + 1;
+                    } else {
+                        emptyPayment++;
+                    }
+                });
+                
+                html += `<p><strong>Total órdenes:</strong> ${orders.length}</p>`;
+                html += `<p><strong>Con método de pago:</strong> ${orders.length - emptyPayment}</p>`;
+                html += `<p class="${emptyPayment > 0 ? 'warning' : 'success'}"><strong>Sin método de pago:</strong> ${emptyPayment}</p>`;
+                
+                if (Object.keys(paymentMethods).length > 0) {
+                    html += '<h3>Métodos de Pago Encontrados:</h3>';
+                    html += '<table><tr><th>Método</th><th>Cantidad</th><th>%</th></tr>';
+                    Object.entries(paymentMethods).sort((a, b) => b[1] - a[1]).forEach(([method, count]) => {
+                        const percent = ((count / orders.length) * 100).toFixed(1);
+                        html += `<tr><td>${method}</td><td>${count}</td><td>${percent}%</td></tr>`;
+                    });
+                    html += '</table>';
+                } else {
+                    html += '<p class="error">❌ No se encontraron métodos de pago en ninguna orden</p>';
+                }
+                
+                // Mostrar ejemplos
+                html += '<h3>Ejemplos de Órdenes (primeras 5):</h3>';
+                html += '<table><tr><th>Order ID</th><th>payment_method</th><th>payment_gateway</th><th>gateway</th></tr>';
+                orders.slice(0, 5).forEach(order => {
+                    html += `<tr>`;
+                    html += `<td>${order.order_id || order.order_name || 'N/A'}</td>`;
+                    html += `<td class="${order.payment_method ? 'filled' : 'empty'}">${order.payment_method || 'VACÍO'}</td>`;
+                    html += `<td class="${order.payment_gateway ? 'filled' : 'empty'}">${order.payment_gateway || 'VACÍO'}</td>`;
+                    html += `<td class="${order.gateway ? 'filled' : 'empty'}">${order.gateway || 'VACÍO'}</td>`;
+                    html += `</tr>`;
+                });
+                html += '</table>';
+                
+                html += '</div>';
+                
+                // Analizar fulfillment_days
+                html += '<div class="section">';
+                html += '<h2>📦 Análisis de fulfillment_days</h2>';
+                
+                let withFulfillment = 0;
+                let emptyFulfillment = 0;
+                const fulfillmentValues = [];
+                
+                orders.forEach(order => {
+                    const days = order.fulfillment_days;
+                    if (days && days !== '' && days !== '0' && !isNaN(days)) {
+                        withFulfillment++;
+                        fulfillmentValues.push(parseFloat(days));
+                    } else {
+                        emptyFulfillment++;
+                    }
+                });
+                
+                html += `<p><strong>Total órdenes:</strong> ${orders.length}</p>`;
+                html += `<p><strong>Con fulfillment_days:</strong> ${withFulfillment}</p>`;
+                html += `<p class="${emptyFulfillment > 0 ? 'warning' : 'success'}"><strong>Sin fulfillment_days:</strong> ${emptyFulfillment}</p>`;
+                
+                if (fulfillmentValues.length > 0) {
+                    const avg = fulfillmentValues.reduce((a, b) => a + b, 0) / fulfillmentValues.length;
+                    const min = Math.min(...fulfillmentValues);
+                    const max = Math.max(...fulfillmentValues);
+                    
+                    html += '<h3>Estadísticas:</h3>';
+                    html += `<p><strong>Promedio:</strong> ${avg.toFixed(1)} días</p>`;
+                    html += `<p><strong>Mínimo:</strong> ${min} días</p>`;
+                    html += `<p><strong>Máximo:</strong> ${max} días</p>`;
+                } else {
+                    html += '<p class="error">❌ No se encontraron valores de fulfillment_days</p>';
+                }
+                
+                // Mostrar ejemplos
+                html += '<h3>Ejemplos de Órdenes (primeras 5):</h3>';
+                html += '<table><tr><th>Order ID</th><th>created_at</th><th>fulfilled_at</th><th>fulfillment_days</th></tr>';
+                orders.slice(0, 5).forEach(order => {
+                    html += `<tr>`;
+                    html += `<td>${order.order_id || order.order_name || 'N/A'}</td>`;
+                    html += `<td>${order.created_at || 'VACÍO'}</td>`;
+                    html += `<td class="${order.fulfilled_at ? 'filled' : 'empty'}">${order.fulfilled_at || 'VACÍO'}</td>`;
+                    html += `<td class="${order.fulfillment_days ? 'filled' : 'empty'}">${order.fulfillment_days || 'VACÍO'}</td>`;
+                    html += `</tr>`;
+                });
+                html += '</table>';
+                
+                html += '</div>';
+                
+                // Verificar nombres de columnas
+                html += '<div class="section">';
+                html += '<h2>📋 Nombres de Columnas Disponibles</h2>';
+                html += '<p>Verifica que estos nombres coincidan con lo que espera el dashboard:</p>';
+                html += '<pre>';
+                const headers = Object.keys(orders[0]);
+                headers.forEach(header => {
+                    const hasData = orders.some(o => o[header] && o[header] !== '');
+                    html += `${hasData ? '✅' : '❌'} ${header}\n`;
+                });
+                html += '</pre>';
+                html += '</div>';
+                
+                // Recomendaciones
+                html += '<div class="section warning">';
+                html += '<h2>💡 Recomendaciones</h2>';
+                html += '<ul>';
+                
+                if (emptyPayment > orders.length * 0.5) {
+                    html += '<li><strong>⚠️ Métodos de Pago:</strong> Más del 50% de las órdenes no tienen método de pago. Verifica que el campo se llame exactamente "payment_method" en Google Sheets.</li>';
+                }
+                
+                if (emptyFulfillment > orders.length * 0.5) {
+                    html += '<li><strong>⚠️ Fulfillment:</strong> Más del 50% de las órdenes no tienen fulfillment_days. Verifica que el campo se llame exactamente "fulfillment_days" en Google Sheets.</li>';
+                }
+                
+                if (emptyPayment === 0 && emptyFulfillment === 0) {
+                    html += '<li><strong>✅ Todo correcto:</strong> Los datos están completos. Si el dashboard no los muestra, el problema está en el código JavaScript.</li>';
+                }
+                
+                html += '</ul>';
+                html += '</div>';
+                
+            } catch (error) {
+                html += `<div class="section error">`;
+                html += `<h3>❌ Error</h3>`;
+                html += `<p>${error.message}</p>`;
+                html += `</div>`;
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Auto-ejecutar
+        window.addEventListener('load', () => {
+            setTimeout(diagnosticar, 500);
+        });
+    </script>
+</body>
+</html>
