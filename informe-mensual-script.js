@@ -113,7 +113,8 @@ function generateReportData(monthNumber) {
         destinos: [],
         totalesMes: {
             bolsas: 0,
-            kilos: 0
+            kilos: 0,
+            ingresos: 0
         }
     };
 
@@ -124,7 +125,8 @@ function generateReportData(monthNumber) {
             presentaciones: [],
             totalesDestino: {
                 bolsas: 0,
-                kilos: 0
+                kilos: 0,
+                ingresos: 0
             }
         };
 
@@ -136,20 +138,35 @@ function generateReportData(monthNumber) {
             const bolsas = Math.floor(baseAmount * seasonalFactor);
             const pesoUnitario = parseInt(presentacion.match(/\d+/)[0]);
             const kilos = bolsas * pesoUnitario;
+            
+            // Calcular ingresos basados en precio por kilo (varía según presentación)
+            const preciosPorKilo = {
+                3: 45,   // $45 por kilo para 3kg
+                6: 42,   // $42 por kilo para 6kg
+                10: 40,  // $40 por kilo para 10kg
+                20: 38,  // $38 por kilo para 20kg
+                30: 35   // $35 por kilo para 30kg
+            };
+            const precioPorKilo = preciosPorKilo[pesoUnitario] || 40;
+            const ingresos = kilos * precioPorKilo;
 
             destinoData.presentaciones.push({
                 nombre: presentacion,
                 bolsas: bolsas,
-                kilos: kilos
+                kilos: kilos,
+                ingresos: ingresos,
+                precioPorKilo: precioPorKilo
             });
 
             destinoData.totalesDestino.bolsas += bolsas;
             destinoData.totalesDestino.kilos += kilos;
+            destinoData.totalesDestino.ingresos += ingresos;
         });
 
         mesData.destinos.push(destinoData);
         mesData.totalesMes.bolsas += destinoData.totalesDestino.bolsas;
         mesData.totalesMes.kilos += destinoData.totalesDestino.kilos;
+        mesData.totalesMes.ingresos += destinoData.totalesDestino.ingresos;
     });
 
     const reportData = {
@@ -183,6 +200,10 @@ function displayReport(data) {
                             <span class="stat-label">Total Kilos:</span>
                             <span class="stat-value">${data.totalesMes.kilos.toLocaleString()} kg</span>
                         </div>
+                        <div class="stat">
+                            <span class="stat-label">Total de Ingresos:</span>
+                            <span class="stat-value">$${data.totalesMes.ingresos.toLocaleString()}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -190,14 +211,16 @@ function displayReport(data) {
             <div class="month-section">
                 <h3>📅 Detalle por Destino - ${mes.nombre} ${data.año}</h3>
                 
-                <div class="table-wrapper">
-                    <table class="report-table">
+                <div class="table-wrapper-extended">
+                    <table class="report-table-extended">
                         <thead>
                             <tr>
                                 <th>Destino</th>
                                 <th>Presentación</th>
                                 <th>Bolsas</th>
+                                <th>Ingresos</th>
                                 <th>Kilos</th>
+                                <th>Precio por Kilo</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -211,17 +234,25 @@ function displayReport(data) {
                     ${index === 0 ? `<td rowspan="${destino.presentaciones.length + 1}" class="destino-cell">${destino.nombre}</td>` : ''}
                     <td>${presentacion.nombre}</td>
                     <td class="number-cell">${presentacion.bolsas.toLocaleString()}</td>
+                    <td class="number-cell">$${presentacion.ingresos.toLocaleString()}</td>
                     <td class="number-cell">${presentacion.kilos.toLocaleString()}</td>
+                    <td class="number-cell">$${presentacion.precioPorKilo.toFixed(2)}</td>
                 </tr>
             `;
         });
 
         // Fila de totales por destino
+        const precioPromedioDestino = destino.totalesDestino.kilos > 0 
+            ? (destino.totalesDestino.ingresos / destino.totalesDestino.kilos).toFixed(2) 
+            : 0;
+        
         html += `
             <tr class="subtotal-row">
                 <td><strong>Total ${destino.nombre}</strong></td>
                 <td class="number-cell"><strong>${destino.totalesDestino.bolsas.toLocaleString()}</strong></td>
+                <td class="number-cell"><strong>$${destino.totalesDestino.ingresos.toLocaleString()}</strong></td>
                 <td class="number-cell"><strong>${destino.totalesDestino.kilos.toLocaleString()}</strong></td>
+                <td class="number-cell"><strong>$${precioPromedioDestino}</strong></td>
             </tr>
         `;
     });
