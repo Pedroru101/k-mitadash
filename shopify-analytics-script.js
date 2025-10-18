@@ -658,6 +658,17 @@ function formatCurrency(amount) {
 function aggregateCustomerData(ordersData) {
     const customerMap = new Map();
 
+    // Crear un mapa de segmentos reales desde customersData
+    const customerSegmentMap = new Map();
+    if (customersData && customersData.length > 0) {
+        customersData.forEach(customer => {
+            const email = customer.email?.toLowerCase().trim();
+            if (email && customer.customer_segment) {
+                customerSegmentMap.set(email, customer.customer_segment);
+            }
+        });
+    }
+
     ordersData.forEach(order => {
         const email = order.customer_email?.toLowerCase().trim();
         if (!email) return;
@@ -674,7 +685,9 @@ function aggregateCustomerData(ordersData) {
                 lastOrder: null,
                 states: new Set(),
                 paymentMethods: new Set(),
-                acceptsMarketing: order.accepts_marketing
+                acceptsMarketing: order.accepts_marketing,
+                // Usar el segmento real de Google Sheets
+                realSegment: customerSegmentMap.get(email) || null
             });
         }
 
@@ -706,16 +719,18 @@ function aggregateCustomerData(ordersData) {
         avgPricePerBag: customer.totalBags > 0 ? customer.totalSpent / customer.totalBags : 0,
         primaryState: Array.from(customer.states)[0] || 'N/A',
         daysSinceLastOrder: customer.lastOrder ? Math.floor((new Date() - customer.lastOrder) / (1000 * 60 * 60 * 24)) : null,
-        segment: getCustomerSegment(customer)
+        // Usar el segmento real de Google Sheets si está disponible
+        segment: customer.realSegment || getCustomerSegment(customer)
     }));
 }
 
-// Función para determinar segmento de cliente
+// Función para determinar segmento de cliente (solo como fallback)
 function getCustomerSegment(customer) {
-    if (customer.totalOrders >= 10) return 'VIP';
-    if (customer.totalOrders >= 5) return 'Frecuente';
-    if (customer.totalOrders >= 2) return 'Regular';
-    return 'Nuevo';
+    // Esta función solo se usa si no hay segmento real de Google Sheets
+    if (customer.totalOrders >= 10) return 'Loyal';
+    if (customer.totalOrders >= 5) return 'Repeat';
+    if (customer.totalOrders >= 2) return 'Repeat';
+    return 'New';
 }
 
 // Función para calcular ventas mensuales
@@ -892,28 +907,166 @@ function generateCustomerSegmentChart(ordersData) {
         segments[customer.segment] = (segments[customer.segment] || 0) + 1;
     });
 
+    // LOG: Mostrar los segmentos reales encontrados
+    console.log('📊 [SEGMENTOS] Segmentos encontrados en los datos:', segments);
+    console.log('📊 [SEGMENTOS] Total de clientes:', customers.length);
+
+    // Orden y colores específicos para los segmentos reales de Google Sheets
+    const segmentOrder = ['New', 'One-time', 'Repeat', 'Loyal'];
+    const segmentColors = {
+        'New': '#10b981',      // Verde
+        'One-time': '#f59e0b', // Naranja
+        'Repeat': '#3b82f6',   // Azul
+        'Loyal': '#ef4444'     // Rojo
+    };
+
+    // Mostrar TODOS los segmentos, incluso los que tienen 0
+    const labels = segmentOrder;
+    const data = labels.map(seg => segments[seg] || 0);
+    const colors = labels.map(seg => segmentColors[seg]);
+
+    console.log('📊 [SEGMENTOS] Labels:', labels);
+    console.log('📊 [SEGMENTOS] Data:', data);
+
     const ctx = document.getElementById('customerSegmentChart');
     if (!ctx) return;
+
+    // Calcular total para porcentajes
+    const total = data.reduce((sum, val) => sum + val, 0);
+
+    // Destruir gráfico anterior si existe
+    if (chartInstances.customerSegmentChart) {
+        chartInstances.customerSegmentChart.destroy();
+    }
 
     chartInstances.customerSegmentChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: Object.keys(segments),
+            labels: labels,
             datasets: [{
-                data: Object.values(segments),
-                backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444']
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#1e293b',
+                hoverBorderWidth: 3,
+                hoverBorderColor: '#ffffff'
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
+            onHover: (event, activeElements) => {
+                event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
+            },
             plugins: {
                 title: {
                     display: true,
-                    text: '👥 Segmentación de Clientes'
+                    text: '👥 Segmentación de Clientes',
+                    color: '#ffffff',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        padding: 15,
+                        font: {
+                            size: 13
+                        },
+                        color: '#ffffff',
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: '#000000',
+                    titleColor: '#ffffff',
+                    titleFont: {
+                        size: 16,
+                        weight: 'bold'
+                    },
+                    bodyColor: '#ffffff',
+                    bodyFont: {
+                        size: 14
+                    },
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    padding: 20,
+                    displayColors: true,
+                    boxWidth: 20,
+                    boxHeight: 20,
+                    boxPadding: 10,
+                    usePointStyle: true,
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return tooltipItems[0].label;
+                        },
+                        label: function(context) {
+                            const value = context.parsed || 0;
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return [
+                                `Clientes: ${value}`,
+                                `Porcentaje: ${percentage}%`
+                            ];
+                        }
+                    }
                 }
             }
         }
     });
+
+    console.log('✅ [GRAFICO] Gráfico de segmentación creado con tooltips habilitados');
+
+    // Crear tabla con los datos
+    const tableContainer = document.getElementById('segmentTableContainer');
+    if (tableContainer) {
+        let tableHTML = `
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
+                <thead>
+                    <tr style="background-color: rgba(255, 255, 255, 0.1); border-bottom: 2px solid rgba(255, 255, 255, 0.2);">
+                        <th style="padding: 10px; text-align: left; color: #ffffff; font-weight: bold;">Segmento</th>
+                        <th style="padding: 10px; text-align: right; color: #ffffff; font-weight: bold;">Clientes</th>
+                        <th style="padding: 10px; text-align: right; color: #ffffff; font-weight: bold;">Porcentaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        labels.forEach((label, index) => {
+            const value = data[index];
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            const color = colors[index];
+            
+            tableHTML += `
+                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                    <td style="padding: 10px; color: #ffffff;">
+                        <span style="display: inline-block; width: 12px; height: 12px; background-color: ${color}; border-radius: 50%; margin-right: 8px;"></span>
+                        ${label}
+                    </td>
+                    <td style="padding: 10px; text-align: right; color: #ffffff; font-weight: bold;">${value}</td>
+                    <td style="padding: 10px; text-align: right; color: #ffffff;">${percentage}%</td>
+                </tr>
+            `;
+        });
+
+        tableHTML += `
+                </tbody>
+                <tfoot>
+                    <tr style="background-color: rgba(255, 255, 255, 0.1); border-top: 2px solid rgba(255, 255, 255, 0.2); font-weight: bold;">
+                        <td style="padding: 10px; color: #ffffff;">TOTAL</td>
+                        <td style="padding: 10px; text-align: right; color: #ffffff;">${total}</td>
+                        <td style="padding: 10px; text-align: right; color: #ffffff;">100%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        `;
+
+        tableContainer.innerHTML = tableHTML;
+    }
 }
 
 // Gráfica de top productos
@@ -958,6 +1111,9 @@ function generateGeographicChart(ordersData) {
         const state = order.shipping_province || 'No especificado';
         stateSales[state] = (stateSales[state] || 0) + parseFloat(order.total_price || 0);
     });
+
+    console.log('🌎 [GEO] Estados encontrados:', Object.keys(stateSales));
+    console.log('🌎 [GEO] Primeras 3 órdenes - shipping_province:', ordersData.slice(0, 3).map(o => o.shipping_province));
 
     const sortedStates = Object.entries(stateSales)
         .sort(([, a], [, b]) => b - a)
@@ -1004,37 +1160,166 @@ function generatePaymentMethodsChart(ordersData) {
     const paymentMethods = {};
 
     ordersData.forEach(order => {
-        const method = order.payment_method || 'No especificado';
+        // Usar payment_gateway de Google Sheets
+        const method = order.payment_gateway || order.payment_method || 'No especificado';
         paymentMethods[method] = (paymentMethods[method] || 0) + 1;
     });
 
+    console.log('💳 [PAYMENT] Métodos de pago encontrados:', paymentMethods);
+
     const ctx = document.getElementById('paymentMethodsChart');
     if (!ctx) return;
+
+    const paymentData = Object.values(paymentMethods);
+    const totalPayments = paymentData.reduce((sum, val) => sum + val, 0);
+
+    // Destruir gráfico anterior si existe
+    if (chartInstances.paymentMethodsChart) {
+        chartInstances.paymentMethodsChart.destroy();
+    }
 
     chartInstances.paymentMethodsChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: Object.keys(paymentMethods),
             datasets: [{
-                data: Object.values(paymentMethods),
-                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+                data: paymentData,
+                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+                borderWidth: 2,
+                borderColor: '#1e293b',
+                hoverBorderWidth: 3,
+                hoverBorderColor: '#ffffff'
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
+            onHover: (event, activeElements) => {
+                event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
+            },
             plugins: {
                 title: {
                     display: true,
-                    text: '💳 Métodos de Pago'
+                    text: '💳 Métodos de Pago',
+                    color: '#ffffff',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        padding: 15,
+                        font: {
+                            size: 13
+                        },
+                        color: '#ffffff',
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: '#000000',
+                    titleColor: '#ffffff',
+                    titleFont: {
+                        size: 16,
+                        weight: 'bold'
+                    },
+                    bodyColor: '#ffffff',
+                    bodyFont: {
+                        size: 14
+                    },
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    padding: 20,
+                    displayColors: true,
+                    boxWidth: 20,
+                    boxHeight: 20,
+                    boxPadding: 10,
+                    usePointStyle: true,
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return tooltipItems[0].label;
+                        },
+                        label: function(context) {
+                            const value = context.parsed || 0;
+                            const percentage = totalPayments > 0 ? ((value / totalPayments) * 100).toFixed(1) : 0;
+                            return [
+                                `Órdenes: ${value}`,
+                                `Porcentaje: ${percentage}%`
+                            ];
+                        }
+                    }
                 }
             }
         }
     });
+
+    console.log('✅ [GRAFICO] Gráfico de métodos de pago creado con tooltips habilitados');
+
+    // Crear tabla con los datos
+    const tableContainer = document.getElementById('paymentTableContainer');
+    if (tableContainer) {
+        const paymentLabels = Object.keys(paymentMethods);
+        const paymentColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
+        
+        let tableHTML = `
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
+                <thead>
+                    <tr style="background-color: rgba(255, 255, 255, 0.1); border-bottom: 2px solid rgba(255, 255, 255, 0.2);">
+                        <th style="padding: 10px; text-align: left; color: #ffffff; font-weight: bold;">Método de Pago</th>
+                        <th style="padding: 10px; text-align: right; color: #ffffff; font-weight: bold;">Órdenes</th>
+                        <th style="padding: 10px; text-align: right; color: #ffffff; font-weight: bold;">Porcentaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        paymentLabels.forEach((label, index) => {
+            const value = paymentData[index];
+            const percentage = totalPayments > 0 ? ((value / totalPayments) * 100).toFixed(1) : 0;
+            const color = paymentColors[index];
+            
+            tableHTML += `
+                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                    <td style="padding: 10px; color: #ffffff;">
+                        <span style="display: inline-block; width: 12px; height: 12px; background-color: ${color}; border-radius: 50%; margin-right: 8px;"></span>
+                        ${label}
+                    </td>
+                    <td style="padding: 10px; text-align: right; color: #ffffff; font-weight: bold;">${value}</td>
+                    <td style="padding: 10px; text-align: right; color: #ffffff;">${percentage}%</td>
+                </tr>
+            `;
+        });
+
+        tableHTML += `
+                </tbody>
+                <tfoot>
+                    <tr style="background-color: rgba(255, 255, 255, 0.1); border-top: 2px solid rgba(255, 255, 255, 0.2); font-weight: bold;">
+                        <td style="padding: 10px; color: #ffffff;">TOTAL</td>
+                        <td style="padding: 10px; text-align: right; color: #ffffff;">${totalPayments}</td>
+                        <td style="padding: 10px; text-align: right; color: #ffffff;">100%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        `;
+
+        tableContainer.innerHTML = tableHTML;
+    }
 }
 
 // Gráfica de tiempo de fulfillment
 function generateFulfillmentChart(ordersData) {
     const monthlyData = calculateMonthlySales(ordersData);
+
+    console.log('📦 [FULFILLMENT] Datos mensuales:', monthlyData.map(d => ({
+        month: d.month,
+        avgFulfillmentDays: d.avgFulfillmentDays
+    })));
+    console.log('📦 [FULFILLMENT] Primeras 3 órdenes - fulfillment_days:', ordersData.slice(0, 3).map(o => o.fulfillment_days));
 
     const ctx = document.getElementById('fulfillmentChart');
     if (!ctx) return;
@@ -2075,17 +2360,17 @@ function generateBusinessInsights() {
     }
 
     // Análisis de clientes
-    const vipCustomers = customers.filter(c => c.segment === 'VIP').length;
+    const loyalCustomers = customers.filter(c => c.segment === 'Loyal').length;
     const inactiveCustomers = customers.filter(c =>
         c.lastOrder && (new Date() - c.lastOrder) > (90 * 24 * 60 * 60 * 1000)
     ).length;
 
-    if (vipCustomers > 0) {
+    if (loyalCustomers > 0) {
         insights.push({
             type: 'success',
             icon: '👑',
-            title: 'Clientes VIP',
-            message: `${vipCustomers} clientes generan alto valor recurrente`
+            title: 'Clientes Leales',
+            message: `${loyalCustomers} clientes generan alto valor recurrente`
         });
     }
 

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Diagnóstico de Kilos - K-mita</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .status {
+            padding: 15px;
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 12px;
+        }
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        tr:hover {
+            background: #f3f4f6;
+        }
+        .number {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .warning {
+            background: #fee2e2;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d1fae5;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+        }
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .metric:last-child {
+            border-bottom: none;
+        }
+        .metric-label {
+            color: #666;
+            font-weight: 500;
+        }
+        .metric-value {
+            color: #333;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+        .diff {
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .diff.positive {
+            color: #10b981;
+        }
+        .diff.negative {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico de Kilos - K-mita Dashboard</h1>
+        <p class="subtitle">Análisis detallado del cálculo de kilos en órdenes</p>
+
+        <div class="status" id="status">
+            ⏳ Cargando datos desde Google Sheets...
+        </div>
+
+        <button onclick="cargarDatos()">🔄 Recargar Datos</button>
+        <button onclick="exportarCSV()">📥 Exportar a CSV</button>
+
+        <div class="section">
+            <h2>📊 Resumen General</h2>
+            <div class="comparison">
+                <div class="card">
+                    <h3>Datos de Google Sheets</h3>
+                    <div class="metric">
+                        <span class="metric-label">Total Órdenes:</span>
+                        <span class="metric-value" id="totalOrders">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Kilos (campo):</span>
+                        <span class="metric-value" id="totalKilosField">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Kilos (calculado):</span>
+                        <span class="metric-value" id="totalKilosCalc">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Diferencia:</span>
+                        <span class="metric-value" id="totalDiff">-</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Estadísticas</h3>
+                    <div class="metric">
+                        <span class="metric-label">Órdenes con diferencia:</span>
+                        <span class="metric-value" id="ordersWithDiff">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Diferencia promedio:</span>
+                        <span class="metric-value" id="avgDiff">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Diferencia máxima:</span>
+                        <span class="metric-value" id="maxDiff">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">% de precisión:</span>
+                        <span class="metric-value" id="precision">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔬 Análisis Detallado por Orden</h2>
+            <p style="margin-bottom: 15px; color: #666;">
+                Mostrando órdenes con diferencias en el cálculo de kilos
+            </p>
+            <div id="detailedTable"></div>
+        </div>
+
+        <div class="section">
+            <h2>📈 Análisis por Mes</h2>
+            <div id="monthlyAnalysis"></div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        let ordersData = [];
+
+        async function cargarDatos() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerHTML = '⏳ Cargando datos desde Google Sheets...';
+            statusEl.style.background = '#f0f4ff';
+
+            try {
+                const ordersURL = `https://docs.google.com/spreadsheets/d/${CONFIG.GOOGLE_SHEETS.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CONFIG.GOOGLE_SHEETS.ORDERS_SHEET)}`;
+                
+                const response = await fetch(ordersURL);
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+
+                const csvText = await response.text();
+                ordersData = parseCSV(csvText);
+
+                statusEl.innerHTML = `✅ Datos cargados: ${ordersData.length} órdenes`;
+                statusEl.style.background = '#d1fae5';
+
+                analizarKilos();
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusEl.innerHTML = `❌ Error: ${error.message}`;
+                statusEl.style.background = '#fee2e2';
+            }
+        }
+
+        function parseCSV(csvText) {
+            if (!csvText || csvText.trim() === '') return [];
+
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length === 0) return [];
+
+            function parseCSVLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            }
+
+            const headers = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length > 0 && values.some(v => v !== '')) {
+                    const rowData = {};
+                    headers.forEach((header, index) => {
+                        rowData[header] = values[index] || '';
+                    });
+                    data.push(rowData);
+                }
+            }
+
+            return data;
+        }
+
+        function calcularKilosDesdeLineItems(order) {
+            // Intentar parsear line_items si existe
+            const lineItemsStr = order.line_items || order.product_titles || '';
+            
+            // Si no hay line items, intentar calcular desde product_titles
+            if (!lineItemsStr) return 0;
+
+            let totalKilos = 0;
+
+            // Método 1: Si tenemos line_items en formato JSON
+            try {
+                const lineItems = JSON.parse(lineItemsStr);
+                if (Array.isArray(lineItems)) {
+                    lineItems.forEach(item => {
+                        const grams = parseFloat(item.grams || 0);
+                        const quantity = parseFloat(item.quantity || 0);
+                        totalKilos += (grams * quantity) / 1000;
+                    });
+                    return totalKilos;
+                }
+            } catch (e) {
+                // No es JSON, continuar con otros métodos
+            }
+
+            // Método 2: Extraer de product_titles
+            const productTitles = order.product_titles || '';
+            const patterns = [
+                /(\d+)\s*kg/gi,
+                /Arena.*?(\d+)kg/gi,
+                /(\d+)kg.*?Arena/gi
+            ];
+
+            const quantities = order.line_items_count ? parseInt(order.line_items_count) : 1;
+            
+            patterns.forEach(pattern => {
+                const matches = productTitles.matchAll(pattern);
+                for (const match of matches) {
+                    const kg = parseFloat(match[1]);
+                    if (!isNaN(kg)) {
+                        totalKilos += kg;
+                    }
+                }
+            });
+
+            return totalKilos;
+        }
+
+        function analizarKilos() {
+            console.log('🔍 Iniciando análisis de kilos...');
+
+            let totalKilosField = 0;
+            let totalKilosCalc = 0;
+            let ordersWithDiff = 0;
+            let differences = [];
+            let maxDiff = 0;
+
+            const ordersWithDifferences = [];
+
+            ordersData.forEach(order => {
+                const kilosField = parseFloat(order.total_kilos || 0);
+                const kilosCalc = calcularKilosDesdeLineItems(order);
+                
+                totalKilosField += kilosField;
+                totalKilosCalc += kilosCalc;
+
+                const diff = Math.abs(kilosField - kilosCalc);
+                
+                if (diff > 0.1) { // Tolerancia de 100 gramos
+                    ordersWithDiff++;
+                    differences.push(diff);
+                    maxDiff = Math.max(maxDiff, diff);
+
+                    ordersWithDifferences.push({
+                        order_id: order.order_id,
+                        order_name: order.order_name,
+                        created_at: order.created_at,
+                        month_key: order.month_key,
+                        kilosField: kilosField,
+                        kilosCalc: kilosCalc,
+                        diff: diff,
+                        product_titles: order.product_titles,
+                        line_items_count: order.line_items_count
+                    });
+                }
+            });
+
+            const avgDiff = differences.length > 0 
+                ? differences.reduce((a, b) => a + b, 0) / differences.length 
+                : 0;
+
+            const precision = ordersData.length > 0 
+                ? ((ordersData.length - ordersWithDiff) / ordersData.length * 100).toFixed(2)
+                : 0;
+
+            // Actualizar resumen
+            document.getElementById('totalOrders').textContent = ordersData.length.toLocaleString();
+            document.getElementById('totalKilosField').textContent = totalKilosField.toFixed(2) + ' kg';
+            document.getElementById('totalKilosCalc').textContent = totalKilosCalc.toFixed(2) + ' kg';
+            
+            const totalDiff = Math.abs(totalKilosField - totalKilosCalc);
+            const diffEl = document.getElementById('totalDiff');
+            diffEl.textContent = totalDiff.toFixed(2) + ' kg';
+            diffEl.className = 'metric-value';
+            if (totalDiff > 10) {
+                diffEl.innerHTML += ' <span class="diff negative">⚠️</span>';
+            } else {
+                diffEl.innerHTML += ' <span class="diff positive">✓</span>';
+            }
+
+            document.getElementById('ordersWithDiff').textContent = ordersWithDiff.toLocaleString();
+            document.getElementById('avgDiff').textContent = avgDiff.toFixed(2) + ' kg';
+            document.getElementById('maxDiff').textContent = maxDiff.toFixed(2) + ' kg';
+            document.getElementById('precision').textContent = precision + '%';
+
+            // Mostrar tabla detallada
+            mostrarTablaDetallada(ordersWithDifferences);
+
+            // Análisis mensual
+            mostrarAnalisisMensual();
+
+            console.log('✅ Análisis completado');
+            console.log('📊 Resumen:', {
+                totalOrders: ordersData.length,
+                totalKilosField,
+                totalKilosCalc,
+                totalDiff,
+                ordersWithDiff,
+                precision: precision + '%'
+            });
+        }
+
+        function mostrarTablaDetallada(orders) {
+            const container = document.getElementById('detailedTable');
+            
+            if (orders.length === 0) {
+                container.innerHTML = '<p style="color: #10b981; font-weight: 600;">✅ ¡Excelente! Todos los kilos coinciden perfectamente.</p>';
+                return;
+            }
+
+            // Ordenar por diferencia (mayor a menor)
+            orders.sort((a, b) => b.diff - a.diff);
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Orden</th>
+                            <th>Fecha</th>
+                            <th>Mes</th>
+                            <th class="number">Kilos (Campo)</th>
+                            <th class="number">Kilos (Calculado)</th>
+                            <th class="number">Diferencia</th>
+                            <th>Productos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            orders.slice(0, 50).forEach(order => {
+                const diffClass = order.diff > 5 ? 'warning' : 'highlight';
+                html += `
+                    <tr>
+                        <td>${order.order_name || order.order_id}</td>
+                        <td>${new Date(order.created_at).toLocaleDateString('es-MX')}</td>
+                        <td>${order.month_key}</td>
+                        <td class="number">${order.kilosField.toFixed(2)}</td>
+                        <td class="number">${order.kilosCalc.toFixed(2)}</td>
+                        <td class="number"><span class="${diffClass}">${order.diff.toFixed(2)} kg</span></td>
+                        <td style="font-size: 0.85em;">${order.product_titles.substring(0, 60)}...</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            if (orders.length > 50) {
+                html += `<p style="margin-top: 10px; color: #666;">Mostrando las primeras 50 de ${orders.length} órdenes con diferencias.</p>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function mostrarAnalisisMensual() {
+            const monthlyData = {};
+
+            ordersData.forEach(order => {
+                const month = order.month_key || 'Sin mes';
+                if (!monthlyData[month]) {
+                    monthlyData[month] = {
+                        orders: 0,
+                        kilosField: 0,
+                        kilosCalc: 0,
+                        diff: 0
+                    };
+                }
+
+                const kilosField = parseFloat(order.total_kilos || 0);
+                const kilosCalc = calcularKilosDesdeLineItems(order);
+
+                monthlyData[month].orders++;
+                monthlyData[month].kilosField += kilosField;
+                monthlyData[month].kilosCalc += kilosCalc;
+                monthlyData[month].diff += Math.abs(kilosField - kilosCalc);
+            });
+
+            let html = '<table><thead><tr><th>Mes</th><th>Órdenes</th><th class="number">Kilos (Campo)</th><th class="number">Kilos (Calc)</th><th class="number">Diferencia</th></tr></thead><tbody>';
+
+            Object.keys(monthlyData).sort().forEach(month => {
+                const data = monthlyData[month];
+                const diffClass = data.diff > 10 ? 'warning' : data.diff > 1 ? 'highlight' : 'success';
+                
+                html += `
+                    <tr>
+                        <td><strong>${month}</strong></td>
+                        <td>${data.orders}</td>
+                        <td class="number">${data.kilosField.toFixed(2)}</td>
+                        <td class="number">${data.kilosCalc.toFixed(2)}</td>
+                        <td class="number"><span class="${diffClass}">${data.diff.toFixed(2)} kg</span></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('monthlyAnalysis').innerHTML = html;
+        }
+
+        function exportarCSV() {
+            let csv = 'Order ID,Order Name,Date,Month,Kilos Field,Kilos Calc,Difference,Products\n';
+            
+            ordersData.forEach(order => {
+                const kilosField = parseFloat(order.total_kilos || 0);
+                const kilosCalc = calcularKilosDesdeLineItems(order);
+                const diff = Math.abs(kilosField - kilosCalc);
+
+                csv += `"${order.order_id}","${order.order_name}","${order.created_at}","${order.month_key}",${kilosField},${kilosCalc},${diff},"${order.product_titles}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `diagnostico-kilos-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+
+        // Cargar datos al iniciar
+        window.addEventListener('DOMContentLoaded', cargarDatos);
+    </script>
+</body>
+</html>

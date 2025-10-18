@@ -50,10 +50,16 @@
             'shipping_country': 'shipping_country',
             'line_items_count': 'line_items_count',
             'product_titles': 'product_titles',
+            'payment_gateway': 'payment_gateway',  // Campo directo de Google Sheets
+            'fulfillment_days': 'fulfillment_days',  // Campo directo de Google Sheets (ya calculado)
             
             // CAMPOS CALCULADOS para el dashboard
             'payment_method': function(order) {
-                // Calcular método de pago desde financial_status
+                // Usar payment_gateway si está disponible, sino calcular desde financial_status
+                if (order.payment_gateway) {
+                    return order.payment_gateway;
+                }
+                
                 const status = (order.financial_status || '').toLowerCase();
                 if (status === 'paid') return 'Pagado';
                 if (status === 'pending') return 'Pendiente';
@@ -63,37 +69,10 @@
                 return 'No especificado';
             },
             
-            'fulfillment_days': function(order) {
-                // Calcular días entre created_at y processed_at
-                if (!order.created_at || !order.processed_at) {
-                    return 0;
-                }
-                
-                try {
-                    const created = new Date(order.created_at);
-                    const processed = new Date(order.processed_at);
-                    
-                    if (isNaN(created.getTime()) || isNaN(processed.getTime())) {
-                        return 0;
-                    }
-                    
-                    const diffTime = Math.abs(processed - created);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    return diffDays >= 0 ? diffDays : 0;
-                } catch (e) {
-                    console.warn('[ADAPTER] Error calculando fulfillment_days:', e);
-                    return 0;
-                }
-            },
-            
             'customer_segment': function(order) {
-                // Segmentación básica por monto de la orden
-                const total = parseFloat(order.total_price) || 0;
-                if (total > 1000) return 'VIP';
-                if (total > 500) return 'Frecuente';
-                if (total > 100) return 'Regular';
-                return 'Nuevo';
+                // Usar el segmento real de Google Sheets si está disponible
+                // El segmento viene de la tabla Customers_Data
+                return order.customer_segment || 'N/A';
             }
         },
         
@@ -163,16 +142,8 @@
         if (adapted.days_since_last_order) adapted.days_since_last_order = parseInt(adapted.days_since_last_order) || 0;
         
         // El customer_segment ya viene calculado del script kmita (New, One-time, Repeat, Loyal)
-        // Mapear a los nombres en español del dashboard
-        if (adapted.customer_segment) {
-            const segmentMap = {
-                'New': 'Nuevo',
-                'One-time': 'Una vez',
-                'Repeat': 'Repetidor',
-                'Loyal': 'Leal'
-            };
-            adapted.customer_segment = segmentMap[adapted.customer_segment] || adapted.customer_segment;
-        }
+        // Mantener los nombres originales de Google Sheets
+        // No traducir para que coincidan con los datos reales
         
         return adapted;
     }
@@ -190,7 +161,7 @@
         console.log(`✅ [ADAPTER] Órdenes adaptadas: ${adapted.length}`);
         console.log(`📊 [ADAPTER] Con método de pago: ${withPayment}/${adapted.length}`);
         console.log(`📦 [ADAPTER] Con fulfillment_days: ${withFulfillment}/${adapted.length}`);
-        console.log(`👥 [ADAPTER] Con segmentación: ${withSegment}/${adapted.length}`);
+        console.log(`👥 [ADAPTER] Con segmentos: ${withSegment}/${adapted.length}`);
         
         return adapted;
     }
@@ -208,7 +179,7 @@
         });
         
         console.log(`✅ [ADAPTER] Clientes adaptados: ${adapted.length}`);
-        console.log(`👥 [ADAPTER] Segmentación:`, segments);
+        console.log(`👥 [ADAPTER] Segmentos:`, segments);
         
         return adapted;
     }

@@ -77,11 +77,11 @@ async function generateMonthlyReport() {
 async function loadRealOrdersData() {
     try {
         const ordersURL = `https://docs.google.com/spreadsheets/d/${CONFIG.GOOGLE_SHEETS.SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(CONFIG.GOOGLE_SHEETS.ORDERS_SHEET)}`;
-        
+
         console.log('[INFORME MENSUAL] Cargando datos reales desde Google Sheets...');
-        
+
         const response = await fetch(ordersURL);
-        
+
         if (!response.ok) {
             throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
@@ -102,7 +102,7 @@ async function loadRealOrdersData() {
 // Parser CSV
 function parseCSV(csvText) {
     if (!csvText || csvText.trim() === '') return [];
-    
+
     const lines = csvText.split('\n').filter(line => line.trim());
     if (lines.length === 0) return [];
 
@@ -151,7 +151,7 @@ async function generateReportData(monthNumber) {
 
     // Cargar datos reales
     const ordersData = await loadRealOrdersData();
-    
+
     if (!ordersData || ordersData.length === 0) {
         console.error('[INFORME MENSUAL] No se pudieron cargar datos reales');
         alert('Error: No se pudieron cargar los datos de Google Sheets');
@@ -178,7 +178,7 @@ async function generateReportData(monthNumber) {
         // Determinar presentación basada en el título del producto
         const productTitles = order.product_titles || '';
         let presentacion = 'Otro';
-        
+
         if (productTitles.includes('3kg') || productTitles.includes('3 kg')) {
             presentacion = 'Arena Biodegradable 3kg';
         } else if (productTitles.includes('6kg') || productTitles.includes('6 kg')) {
@@ -275,7 +275,7 @@ async function generateReportData(monthNumber) {
 // Función para generar reporte vacío
 function generateEmptyReport(monthNumber) {
     const meses = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    
+
     return {
         año: 2025,
         mesSeleccionado: {
@@ -335,7 +335,7 @@ function displayReport(data) {
                             <tr>
                                 <th>DESTINO</th>
                                 <th>PRESENTACIÓN</th>
-                                <th>BOLSAS</th>
+                                <th style="text-align: center;">BOLSAS</th>
                                 <th>INGRESOS</th>
                                 <th>KILOS</th>
                                 <th>PRECIO POR KILO</th>
@@ -360,7 +360,7 @@ function displayReport(data) {
                     <tr>
                         ${index === 0 ? `<td rowspan="${destino.presentaciones.length + 1}" class="destino-cell">${destino.nombre}</td>` : ''}
                         <td>${presentacion.nombre}</td>
-                        <td class="number-cell">${presentacion.bolsas.toLocaleString()}</td>
+                        <td class="number-cell" style="text-align: center;">${presentacion.bolsas.toLocaleString()}</td>
                         <td class="number-cell">$${presentacion.ingresos.toLocaleString()}</td>
                         <td class="number-cell">${presentacion.kilos.toLocaleString()}</td>
                         <td class="number-cell">$${presentacion.precioPorKilo.toFixed(2)}</td>
@@ -369,14 +369,14 @@ function displayReport(data) {
             });
 
             // Fila de totales por destino
-            const precioPromedioDestino = destino.totalesDestino.kilos > 0 
-                ? (destino.totalesDestino.ingresos / destino.totalesDestino.kilos).toFixed(2) 
+            const precioPromedioDestino = destino.totalesDestino.kilos > 0
+                ? (destino.totalesDestino.ingresos / destino.totalesDestino.kilos).toFixed(2)
                 : 0;
-            
+
             html += `
                 <tr class="subtotal-row">
                     <td><strong>Total ${destino.nombre}</strong></td>
-                    <td class="number-cell"><strong>${Math.round(destino.totalesDestino.bolsas).toLocaleString()}</strong></td>
+                    <td class="number-cell" style="text-align: center;"><strong>${Math.round(destino.totalesDestino.bolsas).toLocaleString()}</strong></td>
                     <td class="number-cell"><strong>$${Math.round(destino.totalesDestino.ingresos).toLocaleString()}</strong></td>
                     <td class="number-cell"><strong>${Math.round(destino.totalesDestino.kilos).toLocaleString()}</strong></td>
                     <td class="number-cell"><strong>$${precioPromedioDestino}</strong></td>

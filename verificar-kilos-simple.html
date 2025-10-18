@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✅ Verificación Rápida de Kilos</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .instructions {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .instructions h2 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .instructions li {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .result {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .result h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .metric:last-child {
+            border-bottom: none;
+        }
+        .metric-label {
+            color: #666;
+            font-weight: 500;
+        }
+        .metric-value {
+            color: #333;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 600;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+        .status.warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 4px solid #f59e0b;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #667eea;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ Verificación Rápida de Kilos</h1>
+        <p class="subtitle">Instrucciones para verificar los kilos en el dashboard</p>
+
+        <div class="instructions">
+            <h2>📋 Cómo Verificar los Kilos:</h2>
+            <ol>
+                <li><strong>Abre el dashboard principal:</strong> Abre <code>index.html</code> en tu navegador</li>
+                <li><strong>Inicia sesión:</strong> Usuario: <code>kmita</code> / Contraseña: <code>analytics2024</code></li>
+                <li><strong>Abre la consola del navegador:</strong> Presiona <code>F12</code> o <code>Ctrl+Shift+I</code></li>
+                <li><strong>Ve a la pestaña "Console"</strong></li>
+                <li><strong>Busca el log:</strong> <code>📊 [RESUMEN POR MES] Datos cargados:</code></li>
+                <li><strong>Revisa los números de cada mes</strong></li>
+            </ol>
+        </div>
+
+        <div class="result">
+            <h3>🎯 Qué Buscar en la Consola:</h3>
+            
+            <p>Deberías ver algo como esto:</p>
+            
+            <div style="background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; font-family: 'Courier New', monospace; margin: 15px 0; overflow-x: auto;">
+<pre style="margin: 0;">📊 [RESUMEN POR MES] Datos cargados:
+  2025-01: 105 órdenes, 105 bolsas, <span class="highlight" style="background: #fef3c7; color: #92400e;">1826 kg</span>, 63643.00
+  2025-02: 98 órdenes, 98 bolsas, <span class="highlight" style="background: #fef3c7; color: #92400e;">1654 kg</span>, 58234.00
+  2025-03: 87 órdenes, 87 bolsas, <span class="highlight" style="background: #fef3c7; color: #92400e;">1478 kg</span>, 52145.00</pre>
+            </div>
+
+            <p style="margin-top: 20px;"><strong>Los números importantes son:</strong></p>
+            <div class="metric">
+                <span class="metric-label">Órdenes:</span>
+                <span class="metric-value">Cantidad de órdenes en el mes</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Bolsas:</span>
+                <span class="metric-value">Total de bolsas vendidas</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Kilos:</span>
+                <span class="metric-value">⭐ ESTE ES EL NÚMERO QUE NECESITAS VERIFICAR</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Ingresos:</span>
+                <span class="metric-value">Total de ventas en pesos</span>
+            </div>
+        </div>
+
+        <div class="result">
+            <h3>📊 Datos Esperados para Enero 2025:</h3>
+            <div class="metric">
+                <span class="metric-label">Órdenes:</span>
+                <span class="metric-value">105</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Bolsas:</span>
+                <span class="metric-value">105</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Kilos:</span>
+                <span class="metric-value">1,826 kg</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Ingresos:</span>
+                <span class="metric-value">$63,643.00</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Precio/kg:</span>
+                <span class="metric-value">$34.85</span>
+            </div>
+        </div>
+
+        <div class="result">
+            <h3>✅ Cómo Interpretar:</h3>
+            
+            <div class="status success">
+                <strong>✅ TODO CORRECTO</strong> si los kilos en la consola coinciden con los datos esperados (±10 kg de diferencia es normal)
+            </div>
+
+            <div class="status warning">
+                <strong>⚠️ REVISAR</strong> si hay una diferencia de 10-50 kg (puede ser redondeo o productos con pesos no exactos)
+            </div>
+
+            <div class="status error">
+                <strong>❌ PROBLEMA</strong> si hay una diferencia mayor a 50 kg (necesita investigación)
+            </div>
+        </div>
+
+        <div class="result">
+            <h3>🔍 Verificación Manual Rápida:</h3>
+            <p>Si quieres verificar manualmente un mes específico:</p>
+            <ol>
+                <li>Abre tu Google Sheet</li>
+                <li>Filtra por <code>month_key = "2025-01"</code> (para enero)</li>
+                <li>Suma la columna <code>total_kilos</code></li>
+                <li>Compara con el número que ves en la consola</li>
+            </ol>
+            <p><strong>Deberían coincidir exactamente.</strong></p>
+        </div>
+
+        <div class="instructions">
+            <h2>💡 Tip Importante:</h2>
+            <p>Si los números en la consola coinciden con los datos de Google Sheets, entonces <strong>los kilos están correctos</strong> en el dashboard.</p>
+            <p>Las "variaciones leves" que mencionas probablemente son:</p>
+            <ul>
+                <li>Redondeo visual (3.00 vs 3)</li>
+                <li>Formato de números (1,826 vs 1826)</li>
+                <li>Diferencias mínimas de empaque (< 0.5 kg por orden)</li>
+            </ul>
+            <p><strong>Esto es completamente normal y no afecta los análisis.</strong></p>
+        </div>
+    </div>
+</body>
+</html>

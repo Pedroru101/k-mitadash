@@ -9,6 +9,7 @@
     <script src="config.js"></script>
     <!-- Librerías externas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <!-- Adaptadores de datos (deben cargarse ANTES del script principal) -->
     <script src="adapter-real-data.js"></script>
     <script src="force-real-data.js"></script>
@@ -201,12 +202,14 @@
                         <div class="chart-container">
                             <canvas id="customerSegmentChart"></canvas>
                         </div>
+                        <div id="segmentTableContainer" style="margin-top: 20px;"></div>
                     </div>
                     <div class="chart-card">
                         <h3 class="chart-title">💳 Métodos de Pago</h3>
                         <div class="chart-container">
                             <canvas id="paymentMethodsChart"></canvas>
                         </div>
+                        <div id="paymentTableContainer" style="margin-top: 20px;"></div>
                     </div>
                     <div class="chart-card">
                         <h3 class="chart-title">🌎 Ventas por Estado</h3>
@@ -288,6 +291,7 @@
                                     <th>Clientes</th>
                                     <th>Valor Promedio</th>
                                     <th>Kilos</th>
+                                    <th>Fulfillment</th>
                                 </tr>
                             </thead>
                             <tbody id="monthlyAnalysisBody">
