@@ -2,12 +2,8 @@
   "name": "k-mita-analytics-dashboard",
   "version": "1.0.0",
   "description": "Dashboard de análisis para K-mita - Negocio de café con métricas específicas de Shopify",
-  "main": "simple-dashboard.html",
+  "main": "index.html",
   "scripts": {
-    "start": "python server.py",
-    "build": "tailwindcss -i ./styles.css -o ./shopify-analytics-styles.css --watch",
-    "build:prod": "tailwindcss -i ./styles.css -o ./shopify-analytics-styles.css --minify",
-    "dev": "python -m http.server 8080",
     "deploy": "netlify deploy --prod"
   },
   "keywords": [
@@ -24,10 +20,5 @@
     "type": "git",
     "url": "https://github.com/k-mita/analytics-dashboard.git"
   },
-  "homepage": "https://k-mita-analytics.netlify.app",
-  "devDependencies": {
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.0"
-  }
+  "homepage": "https://k-mita-analytics.netlify.app"
 }

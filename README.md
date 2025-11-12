@@ -65,7 +65,7 @@ address_city, address_province, address_country
 ## 🚀 Uso del Dashboard
 
 ### Acceso
-1. Abre `shopify-analytics-dashboard.html`
+1. Abre `index.html` en tu navegador o accede a la URL de Netlify
 2. **Usuario**: `kmita`
 3. **Contraseña**: `analytics2024`
 
@@ -80,18 +80,15 @@ address_city, address_province, address_country
 
 ```
 k-mitadash/
-├── shopify-analytics-dashboard.html    # Dashboard principal
-├── shopify-analytics-script.js         # Script principal integrado con toda la lógica
-├── styles.css                         # Estilos base con Tailwind
+├── index.html                         # Dashboard principal
+├── shopify-analytics-script.js        # Script principal con toda la lógica
+├── shopify-analytics-styles.css       # Estilos compilados
 ├── config.js                          # Configuración centralizada
-├── validate-setup.js                  # Herramientas de validación y debugging
-├── sample-data.json                   # Datos de ejemplo para fallback
-├── server.js                          # Servidor Node.js para desarrollo
-├── server.py                          # Servidor Python alternativo
-├── package.json                       # Configuración del proyecto
 ├── netlify.toml                       # Configuración de despliegue
-├── .env                              # Variables de entorno
-└── README.md                         # Documentación
+├── _redirects                         # Reglas de redireccionamiento
+├── package.json                       # Metadatos del proyecto
+├── .gitignore                         # Archivos ignorados por git
+└── README.md                          # Documentación
 ```
 
 ## 🛠️ Tecnologías
